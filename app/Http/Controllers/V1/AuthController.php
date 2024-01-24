@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
@@ -111,6 +112,32 @@ class AuthController extends Controller
 
         ];
         return response()->json($data);
+    }
+    public function verifyGoogleDesktopResponse(Request $request)
+    {
+        $userinfoRequestUri = 'https://www.googleapis.com/oauth2/v3/userinfo';
+
+        $userInfoResponse = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $request->access_token,
+            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        ])->get($userinfoRequestUri);
+
+        $userInfo = json_decode($userInfoResponse->body(), true);
+
+        $email = $userInfo['email'];
+
+        $user = User::where('email', $email)->first();
+
+        if($user) {
+            if($user->is_verified == 0) {
+                $user->update(['is_verified' => 1]);
+            }
+            $token = $user->createToken('api-token')->plainTextToken;
+            return response()->json(['status_code' => 1,'data' => ['user' => $user, 'token' => $token ],'message'=>'Login successfull.']);
+        }
+        else {
+            return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not registered']);
+        }
     }
     
 }
