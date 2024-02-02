@@ -9,6 +9,7 @@ use App\Models\UserActivity;
 use App\Models\UserSubActivity;
 use DateTime;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class UserActivityController extends Controller
 {
@@ -139,6 +140,18 @@ class UserActivityController extends Controller
         }
 
         return $responseData;
+    }
+    function getTotalTimeWorked(Request $request)
+    {
+        $date = $request->date;
+        $result = DB::table('user_activities as ua')
+            ->select('ua.user_id', DB::raw('DATE(ua.start_datetime) AS work_date'))
+            ->selectRaw('COALESCE(SUM(TIMESTAMPDIFF(SECOND, ua.start_datetime, ua.end_datetime)), 0) AS total_time_worked')
+            ->whereDate('ua.start_datetime', $date)
+            ->groupBy('ua.user_id', 'work_date')
+            ->get();
+
+        return response()->json($result);
     }
 }
 
