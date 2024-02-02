@@ -18,6 +18,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/auth/linkedin/callback', [AuthController::class, 'handleLinkedinCallback']);
 
     Route::post('/auth/desktop/google', [AuthController::class, 'verifyGoogleDesktopResponse']);
+
+    Route::get('/fetch-total-time/', [UserActivityController::class, 'getTotalTimeWorked']);
     
     Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::get('/user',function (Request $request) {
