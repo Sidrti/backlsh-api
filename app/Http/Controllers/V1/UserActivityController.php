@@ -21,44 +21,41 @@ class UserActivityController extends Controller
         if($request->all())
         {
             $userId = auth()->user()->id;
-
             $processedActivityData = $this->getActivityStartEndTime($request->all());
             
-            foreach ($processedActivityData as $item) {
-                foreach ($processedActivityData as $activity) {
-                    
-                    $process = Process::firstOrCreate([
-                        'process_name' => $item['process'], 
-                        'type' => 'BROWSER'
-                    ]);
-    
-                    $userActivity = UserActivity::create([
-                        'user_id' => $userId,
-                        'process_id' => $process->id,
-                        'productivity_status' => $activity['productivityStatus'],
-                        'start_datetime' => $activity['startDateTime'],
-                        'end_datetime' => $activity['endDateTime'],
-                    ]);
+            foreach ($processedActivityData as $activity) {
                 
-                    // Insert sub-processes
-                    foreach ($activity['subProcess'] as $subProcess) {
-                        UserSubActivity::create([
-                            'user_activity_id' => $userActivity->id,
-                            'title' => $subProcess['title'],
-                            'website_url' => $subProcess['url'],
-                            'productivity_status' => $subProcess['productivityStatus'],
-                            'start_datetime' => $subProcess['startDateTime'],
-                            'end_datetime' => $subProcess['endDateTime'],
-                        ]);
-                    }
+                $process = Process::firstOrCreate([
+                    'process_name' => $activity['process'], 
+                    'type' => $activity['type'], 
+                ]);
+
+                $userActivity = UserActivity::create([
+                    'user_id' => $userId,
+                    'process_id' => $process->id,
+                    'productivity_status' => $activity['productivityStatus'],
+                    'start_datetime' => $activity['startDateTime'],
+                    'end_datetime' => $activity['endDateTime'],
+                ]);
+            
+                // Insert sub-processes
+                foreach ($activity['subProcess'] as $subProcess) {
+                    UserSubActivity::create([
+                        'user_activity_id' => $userActivity->id,
+                        'title' => $subProcess['title'],
+                        'website_url' => $subProcess['url'],
+                        'productivity_status' => $subProcess['productivityStatus'],
+                        'start_datetime' => $subProcess['startDateTime'],
+                        'end_datetime' => $subProcess['endDateTime'],
+                    ]);
                 }
             }
         }
 
         $response = [
-            'StatusCode' => 1,
-            'Data' => [],
-            'Message' => 'Hurray !' 
+            'status_code' => 1,
+            'data' => [],
+            'message' => 'Hurray !' 
         ];
 
         return response()->json($response);
@@ -69,7 +66,9 @@ class UserActivityController extends Controller
         $subProcessData = [];
         $responseData = [];
 
+
         foreach ($batchData as $key => $data) {
+
             $processName = $data['ProcessName'];
             $preTimestamp = $data['DateTime'];
             $dateTime = new DateTime($preTimestamp);
