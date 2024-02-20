@@ -1,13 +1,14 @@
 <?php
-
 namespace App\Http\Controllers\V1;
 
+use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -20,21 +21,166 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
         if($user) {
-            //if($user->is_verified) {
-                if ($user && Hash::check($request->input('password'), $user->password)) { 
-                    $token = $user->createToken('api-token')->plainTextToken;
-                    return response()->json(['status_code' => 1,'data' => ['user' => $user, 'token' => $token ],'message'=>'Login successfull.']);
-                }
-                else {
-                    return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Incorrect password.']);
-                }
-          //  }
-            //else {
-              //  return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not verified. Please goto register first']);
-            //}
+            if ($user && Hash::check($request->input('password'), $user->password)) { 
+                $token = $user->createToken('api-token')->plainTextToken;
+                return response()->json(['status_code' => 1,'data' => ['user' => $user, 'token' => $token ],'message'=>'Login successfull.']);
+            }
+            else {
+                return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Incorrect password.']);
+            }
         }
         else {
             return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not registered']);
+        }
+    }
+    public function registerAdmin(Request $request) 
+    {
+        $request->validate([
+            'name' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ]);
+
+        $user = User::where('email', $request->input('email'))->first();
+        if(!$user) {
+            $user = Helper::createNewUser($request->input('name'),$request->input('email'),$request->input('password'),1,'ADMIN');
+            $message = 'Your account has been created !';
+            $token = $user->createToken('api-token')->plainTextToken;
+
+            $verificationLink =$this->generateVerificationLink($user->id,'REGISTER');
+            $data = [
+                'name' => $user->name,
+                'link' => $verificationLink
+            ];
+            $body = view('email.verification_email', $data)->render();
+            $subject = 'Verify your email';
+            Helper::sendEmail($user->email,$subject,$body);
+
+            $response = [
+                'status_code' => 1,
+                'data' => [
+                    'user' => $user,
+                    'token' => $token,
+                ],
+                "message" => $message,
+    
+            ];
+            return response()->json($response);
+        }
+        else {
+            $message = 'Your account already exists ! Please login ';
+            $data = [
+                'status_code' => 2,
+                "message" => $message,
+    
+            ];
+            return response()->json($data);
+        }
+
+    }
+    public function sendVerificationLink()
+    {
+        $verificationLink =$this->generateVerificationLink(auth()->user()->id,'REGISTER');
+        $user = auth()->user();
+        $data = [
+            'name' => $user->name,
+            'link' => $verificationLink
+        ];
+        $body = view('email.verification_email', $data)->render();
+        $subject = 'Verify your email';
+        Helper::sendEmail($user->email,$subject,$body);
+        $response = [
+            'status_code' => 1,
+            'message' => 'Verication link sent',
+            'link' => $verificationLink
+        ];
+        return response()->json($response);
+
+    }
+    public function forgetPasswordSendVerificationLink(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email',$request->input('email'))->first();
+        if($user) {
+            $verificationLink =$this->generateVerificationLink($user->id,'FORGET_PASSWORD');
+            $data = [
+                'name' => $user->name,
+                'link' => $verificationLink
+            ];
+            $body = view('email.verification_email', $data)->render();
+            $subject = 'Verify your email';
+            Helper::sendEmail($user->email,$subject,$body);
+            $response = [
+                'status_code' => 1,
+                'message' => 'Verication link sent. Please check your email',
+                'link' => $verificationLink
+            ];
+        }
+        else {
+            $response = [
+                'status_code' => 2,
+                'message' => 'Incorrect email',
+            ];
+        }
+
+        return response()->json($response);
+    }
+    private function generateVerificationLink($user_id,$type='')
+    {
+        $verificationToken = Str::random(40);
+        $user = User::where('id', $user_id)->first();
+        $user->update([
+            'verification_token' => $verificationToken,
+        ]);
+
+        $baseUrl = url('/');
+        $verificationLink = $baseUrl . '/api/v1/auth/verify-email/' . $verificationToken.'/'.$user_id;
+        if($type == 'FORGET_PASSWORD') {
+            $verificationLink = $baseUrl . '/api/v1/auth/forget-password/verify-email/' . $verificationToken.'/'.$user_id;
+        }
+        
+        return $verificationLink;
+    }
+    public function verifyEmail($verificationToken,$user_id)
+    {
+        $user = User::where('id', $user_id)->where('verification_token',$verificationToken)->first();
+        if($user) {
+            $user->update([
+                'verification_token' => '',
+                'is_verified' => 1
+            ]);
+            return redirect(config('app.website_url'));
+        }
+        else {
+            $data = [
+                'status_code' => 2,
+                'message' => 'Unable to verify email. Please try again',
+    
+            ];
+            return response()->json($data);
+        }
+    }
+    public function forgetPasswordVerifyEmail($verificationToken,$user_id)
+    {
+        $user = User::where('id', $user_id)->where('verification_token',$verificationToken)->first();
+        if($user) {
+            $user->update([
+                'verification_token' => '',
+            ]);
+            $token = $user->createToken('api-token')->plainTextToken;
+            $redirectWebsiteUrl = config('app.website_url').'/change-password?token='.$token;
+            return redirect($redirectWebsiteUrl);
+        }
+        else {
+            $data = [
+                'status_code' => 2,
+                'message' => 'Unable to verify email. Please try again',
+    
+            ];
+            return response()->json($data);
         }
     }
     public function redirectToGoogle()
@@ -52,32 +198,27 @@ class AuthController extends Controller
         $user = User::where('email', $googleUser->getEmail())->first();
 
         if (!$user) {
-            $user = User::create([
-                'name' => $googleUser->getName(),
-                'email' => $googleUser->getEmail(),
-                'password' => rand(10000,1000000),
-                'login_type' => 2,
-                'role' => 'ADMIN'
-            ]);
+            $user = Helper::createNewUser($googleUser->getName(),$googleUser->getEmail(),rand(10000,1000000),2,'ADMIN');
 
             $message = 'Hurray '.$googleUser->getName().' ! Happy productivity.';
         }
         else {
             $user = User::where('email', $googleUser->getEmail())->first();
             $message = 'Welcome back '.$googleUser->getName();
-           
         }
         $token = $user->createToken('api-token')->plainTextToken;
-        $data = [
-            'status_code' => 1,
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-            "message" => $message,
+        return redirect(config('app.website_url').'/login?token=' . $token);
 
-        ];
-        return response()->json($data);
+        // $data = [
+        //     'status_code' => 1,
+        //     'data' => [
+        //         'user' => $user,
+        //         'token' => $token,
+        //     ],
+        //     "message" => $message,
+
+        // ];
+        // return response()->json($data);
     }
     public function handleLinkedinCallback()
     {

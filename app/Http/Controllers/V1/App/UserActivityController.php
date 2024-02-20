@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Http\Controllers\V1;
+namespace App\Http\Controllers\V1\App;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\Helper;
 use App\Models\Process;
 use App\Models\UserActivity;
 use App\Models\UserSubActivity;
+use Carbon\Carbon;
 use DateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +16,6 @@ class UserActivityController extends Controller
 {
     public function createUserActivity(Request $request)
     {
-      //  $validated = $request->validate([
-        //    'Data' => 'required',
-       // ]);
         if($request->all())
         {
             $userId = auth()->user()->id;
@@ -40,8 +38,16 @@ class UserActivityController extends Controller
             
                 // Insert sub-processes
                 foreach ($activity['subProcess'] as $subProcess) {
+                    $websiteProcess = null;
+                    if($activity['type'] == 'BROWSER') {
+                        $websiteProcess = Process::firstOrCreate([
+                            'process_name' => Helper::getDomainFromUrl($subProcess['url']), 
+                            'type' => 'WEBSITE', 
+                        ]);  
+                    }
                     UserSubActivity::create([
                         'user_activity_id' => $userActivity->id,
+                        'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
                         'title' => $subProcess['title'],
                         'website_url' => $subProcess['url'],
                         'productivity_status' => $subProcess['productivityStatus'],
@@ -59,6 +65,24 @@ class UserActivityController extends Controller
         ];
 
         return response()->json($response);
+    }
+    public function fetchUserTotalTimeInSeconds()
+    {
+        $userId = auth()->user()->id;
+        $today = Carbon::now()->format('Y-m-d');
+
+        $startDate = $today->startOfDay();
+        $endDate = $today->endOfDay();
+        $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate);
+        $totalTimeInSeconds = $totalTimeInHours * 3600;
+      //  print_r($startDate);
+        $response = [
+            'status_code' => 1,
+            'data' => ['total_time' => $startDate ]
+        ];
+
+        return response()->json($response);
+
     }
     private function getActivityStartEndTime($batchData): array
     {
@@ -140,7 +164,7 @@ class UserActivityController extends Controller
 
         return $responseData;
     }
-    function getTotalTimeWorked(Request $request)
+    public function getTotalTimeWorked(Request $request)
     {
         $date = $request->date;
         $result = DB::table('user_activities as ua')
