@@ -21,7 +21,7 @@ return new class extends Migration
             $table->integer('login_type');
             $table->integer('status')->default(1);
             $table->string('role');
-            $table->unsignedBigInteger('parent_user_id')->nullable();
+            $table->unsignedBigInteger('parent_user_id')->nullable()->default(-1);
             $table->rememberToken();
 
             // Foreign Key

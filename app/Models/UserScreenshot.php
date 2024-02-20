@@ -20,5 +20,12 @@ class UserScreenshot extends Authenticatable
     protected $fillable = [
         'process_id',
         'screenshot_path',
+        'user_id',
+        'website_url'
     ];
+
+    public function getScreenshotPathAttribute($value)
+    {
+        return $value != null ? config('app.asset_url').$value : $value;
+    }
 }

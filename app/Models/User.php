@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+
+use App\AttendanceSchedule;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -24,7 +26,9 @@ class User extends Authenticatable
         'login_type',
         'role',
         'parent_user_id',
-        'status'
+        'status',
+        'is_verified',
+        'verification_token'
 
     ];
 
@@ -35,6 +39,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'updated_at',
         'remember_token',
     ];
 
@@ -46,4 +51,9 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    public function attendanceSchedules()
+    {
+      return $this->belongsToMany(AttendanceSchedule::class);
+    }
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V1;
+namespace App\Http\Controllers\V1\App;
 
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
@@ -14,27 +14,32 @@ class ScreenshotController extends Controller
     public function createScreenshot(Request $request)
     {
         $request->validate([
-            'ScreenshotImage' => 'required|mimes:jpeg,jpg,png|max:2048',
-            'ProcessName' => 'required|string'
+            'screenshot_image' => 'required|mimes:jpeg,jpg,png|max:2048',
+            'process_name' => 'required|string'
         ]);
-        $file = $request->file('ScreenshotImage');
+        $file = $request->file('screenshot_image');
         $dir = '/uploads/screenshots/';
 
         $path = Helper::saveImageToServer($file,$dir);
+
+        $type = Helper::computeType($request->input('process_name'));
         $process = Process::firstOrCreate([
-            'process_name' => $request->input('ProcessName'), 
-            'type' => 'BROWSER'
+            'process_name' => $request->input('process_name'), 
+            'type' => $type
         ]);
+
+        $websiteUrl = $type == 'BROWSER' ? Helper::getDomainFromUrl($request->input('website_url','')) : '';
 
         UserScreenshot::create([
             'process_id' => $process->id,
             'screenshot_path' => $path,
+            'user_id' => auth()->user()->id,
+            'website_url' => $websiteUrl
         ]);
 
         $response = [
-            'StatusCode' => 1,
-            'Data' => [],
-            'Message' => 'Hurray !' 
+            'status_code' => 1,
+            'message' => 'Hurray !' 
         ];
         return response()->json($response);
     }
