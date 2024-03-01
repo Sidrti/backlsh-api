@@ -60,7 +60,7 @@ class Helper
 
         return round($filteredActivities->sum(function ($activity) {
             return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        }), 2);
+        }), 2).' Hours';
     }
     public static function calculateTotalHoursByParentId($userId,$startDate,$endDate,$status = null)
     {
@@ -76,7 +76,7 @@ class Helper
 
         return round($filteredActivities->sum(function ($activity) {
             return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        }), 1);
+        }), 1).' Hours';
     }
     public static function getUserAttendance($userId,$startDate,$endDate)
     {

@@ -25,7 +25,7 @@ return new class extends Migration
             $table->rememberToken();
 
             // Foreign Key
-            $table->foreign('parent_user_id')->references('id')->on('users');
+            // $table->foreign('parent_user_id')->references('id')->on('users');
 
             $table->timestamps();
         });

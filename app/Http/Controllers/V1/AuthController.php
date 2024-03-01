@@ -128,6 +128,30 @@ class AuthController extends Controller
 
         return response()->json($response);
     }
+    public function forgetPasswordChangePassword(Request $request)
+    {
+        $request->validate([
+            'password' => 'required|min:6',
+        ]);
+        $user = User::find(auth()->user()->id);
+        $user->password = Hash::make($request->input('password'));
+        $user->save();
+
+        $token =  $request->header('Authorization');
+        if (Str::startsWith($token, 'Bearer ')) {
+            $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
+        }
+        $response = [
+            'status_code' => 1,
+            'data' => [
+                'user' => $user,
+                'token' => $token,
+            ],
+            'message' => 'Password updated',
+        ];
+        return response()->json($response);
+
+    }
     private function generateVerificationLink($user_id,$type='')
     {
         $verificationToken = Str::random(40);
@@ -137,9 +161,9 @@ class AuthController extends Controller
         ]);
 
         $baseUrl = url('/');
-        $verificationLink = $baseUrl . '/api/v1/auth/verify-email/' . $verificationToken.'/'.$user_id;
+        $verificationLink = $baseUrl . '/api/v1/website/auth/verify-email/' . $verificationToken.'/'.$user_id;
         if($type == 'FORGET_PASSWORD') {
-            $verificationLink = $baseUrl . '/api/v1/auth/forget-password/verify-email/' . $verificationToken.'/'.$user_id;
+            $verificationLink = $baseUrl . '/api/v1/website/auth/forget-password/verify-email/' . $verificationToken.'/'.$user_id;
         }
         
         return $verificationLink;
@@ -189,7 +213,7 @@ class AuthController extends Controller
     }
     public function redirectToLinkedin()
     {
-        return Socialite::driver('linkedin')->stateless()->redirect();
+        return Socialite::driver('linkedin-openid')->stateless()->redirect();
     }
     public function handleGoogleCallback()
     {
@@ -207,7 +231,7 @@ class AuthController extends Controller
             $message = 'Welcome back '.$googleUser->getName();
         }
         $token = $user->createToken('api-token')->plainTextToken;
-        return redirect(config('app.website_url').'/login?token=' . $token);
+        return redirect(config('app.website_url').'/social-login?token=' . $token);
 
         // $data = [
         //     'status_code' => 1,
@@ -220,9 +244,26 @@ class AuthController extends Controller
         // ];
         // return response()->json($data);
     }
+    public function me(Request $request)
+    {
+        $token =  $request->header('Authorization');
+        if (Str::startsWith($token, 'Bearer ')) {
+            $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
+        }
+          $data = [
+            'status_code' => 1,
+            'data' => [
+                'user' => auth()->user(),
+                'token' => $token
+            ],
+            "message" => 'User details fetched',
+
+        ];
+        return response()->json($data);
+    }
     public function handleLinkedinCallback()
     {
-        $linkedinUser = Socialite::driver('linkedin')->stateless()->user();
+        $linkedinUser = Socialite::driver('linkedin-openid')->stateless()->user();
         
         $user = User::where('email', $linkedinUser->getEmail())->first();
 
@@ -243,16 +284,7 @@ class AuthController extends Controller
            
         }
         $token = $user->createToken('api-token')->plainTextToken;
-        $data = [
-            'status_code' => 1,
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-            "message" => $message,
-
-        ];
-        return response()->json($data);
+        return redirect(config('app.website_url').'/social-login?token=' . $token);
     }
     public function verifyGoogleDesktopResponse(Request $request)
     {
