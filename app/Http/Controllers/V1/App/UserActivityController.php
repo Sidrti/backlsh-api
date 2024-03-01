@@ -90,7 +90,6 @@ class UserActivityController extends Controller
         $subProcessData = [];
         $responseData = [];
 
-
         foreach ($batchData as $key => $data) {
 
             $processName = $data['ProcessName'];

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V1\Website;
 
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Models\UserActivity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -28,6 +29,8 @@ class DashboardController extends Controller
         $todayTeamAttendance = $this->getTeamAttendanceToday($userId);
         $topMembers = $this->getTopMostProductiveMembers($userId);
 
+        $totalMembersInTeam = $this->getTotalTeamCount($userId);
+
         $data =  [
             'total_time_worked' => $totalHoursWorked,
             'total_productive_hours' => $totalProductiveHours,
@@ -36,7 +39,8 @@ class DashboardController extends Controller
             'team_working_trend' => $teamWorkingTrend,
             'today_online_member_count' => $todayOnlineMemberCount,
             'today_team_attendance' => $todayTeamAttendance,
-            'top_members' => $topMembers
+            'top_members' => $topMembers,
+            'total_members' => $totalMembersInTeam
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -176,6 +180,10 @@ class DashboardController extends Controller
             ->get();
 
         return $topMembers;
+    }
+    private function getTotalTeamCount($adminId) 
+    {
+        return User::where('parent_user_id',$adminId)->count() + 1;
     }
     private function getUserRankOfmonth($userId)
     {

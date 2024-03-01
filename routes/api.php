@@ -34,9 +34,6 @@ Route::prefix('v1')->group(function () {
     });
     
     Route::group(['middleware' => ['auth:sanctum']], function () {
-        Route::get('/user',function (Request $request) {
-            return $request->user();
-        });
         Route::group(['prefix' => 'app'], function () { 
             Route::get('/user-activity/fetch-time', [UserActivityController::class, 'fetchUserTotalTimeInSeconds']);
             Route::post('/user-activity/create', [UserActivityController::class, 'createUserActivity']);
@@ -45,6 +42,8 @@ Route::prefix('v1')->group(function () {
         });
         
         Route::group(['prefix' => 'website'], function () {
+            Route::get('/auth/user', [AuthController::class, 'me']);
+            Route::post('/auth/forget-password/change-password', [AuthController::class, 'forgetPasswordChangePassword']);
             Route::get('/auth/send-verification-link', [AuthController::class, 'sendVerificationLink']);
 
             Route::get('/admin-dashboard', [DashboardController::class, 'fetchAdminDashboard']);
@@ -71,3 +70,5 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
+
+?>
