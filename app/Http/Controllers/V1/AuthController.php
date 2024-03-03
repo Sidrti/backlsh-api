@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V1;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -250,11 +251,34 @@ class AuthController extends Controller
         if (Str::startsWith($token, 'Bearer ')) {
             $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
         }
+        
           $data = [
             'status_code' => 1,
             'data' => [
                 'user' => auth()->user(),
-                'token' => $token
+                'token' => $token,
+            ],
+            "message" => 'User details fetched',
+
+        ];
+        return response()->json($data);
+    }
+    public function fetchUserAccountDetails() 
+    {
+        $user = auth()->user();
+        $userSteps = $this->getUserCompletedSteps($user);
+        $subscription = [
+            'days_left' => 9,
+            'sub_title' => 'left in your free trial',
+            'show_button' => true,
+            'button_text' => 'UPGRADE NOW',
+            'button_link' => '/dashboard'
+        ];
+        $data = [
+            'status_code' => 1,
+            'data' => [
+                'user_steps' => $userSteps,
+                'subscription' => $subscription
             ],
             "message" => 'User details fetched',
 
@@ -312,5 +336,18 @@ class AuthController extends Controller
             return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not registered']);
         }
     }
-    
+    private function getUserCompletedSteps($user)
+    {
+        $team_member_exists = User::where('parent_user_id',$user->id)->exists();
+        $activityCount = UserActivity::where('user_id', $user->id)
+        ->count();
+
+        return [
+            'create_account' => true,
+            'confirm_email' => $user->is_verified,
+            'download_app' => $activityCount > 0 ? true : false,
+            'add_team_member' => $team_member_exists,
+            'add_card' => true,
+        ];
+    }
 }
