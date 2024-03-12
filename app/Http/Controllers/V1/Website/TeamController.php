@@ -68,13 +68,16 @@ class TeamController extends Controller
     public function fetchTeamMembers(Request $request)
     {
         $currentDate = Carbon::now();
-    
+        $userId = auth()->user()->id;
         $tenDaysAgo = $currentDate->copy()->subDays(10)->toDateString();
     
         // Fetch team members along with their activity status
         $teamMembers = User::select('users.id','users.name','users.email')
             ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
-            ->where('users.parent_user_id', auth()->user()->id)
+             ->where(function ($query) use ($userId) {
+                $query->where('users.parent_user_id', $userId)
+                      ->orWhere('users.id', $userId);
+                })
             ->groupBy('users.id','users.name','users.email')
             ->selectRaw('IF(MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
             ->get();

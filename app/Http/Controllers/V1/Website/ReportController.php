@@ -64,11 +64,12 @@ class ReportController extends Controller
             'user_activities.process_id',
             'processes.process_name',
             'user_activities.productivity_status',
+            'processes.type',
             DB::raw('round(SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime))/3600,1) AS total_time'),
         )
         ->where('user_activities.user_id', $userId)
         ->whereBetween('user_activities.start_datetime', [$startDate, $endDate])
-        ->groupBy('user_activities.process_id', 'processes.process_name','user_activities.productivity_status')
+        ->groupBy('user_activities.process_id', 'processes.process_name','user_activities.productivity_status','processes.type')
         ->get();
 
         foreach($processData as $item) {
@@ -99,7 +100,7 @@ class ReportController extends Controller
         ->where('user_activities.process_id', $processId)
         ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
         ->groupBy('user_activities.process_id', 'user_sub_activities.website_url','user_sub_activities.productivity_status','user_sub_activities.end_datetime','user_sub_activities.start_datetime')
-        ->get();
+        ->paginate(100);
 
         foreach($processData as $item) {
             $processId = $item->process_id;
