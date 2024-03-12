@@ -263,6 +263,25 @@ class AuthController extends Controller
         ];
         return response()->json($data);
     }
+    public function meUpdate(Request $request) 
+    {
+        $request->validate([
+            'media' => 'required|mimes:png,jpg,jpeg|max:5000',
+        ]);
+        $file = $request->file('media');
+        $dir = '/uploads/profile/';
+        $path = Helper::saveImageToServer($file,$dir);
+        $user = User::find(auth()->user()->id);
+        $user->update([
+            'profile_picture' => $path,
+        ]);
+        $data = [
+            'status_code' => 1,
+            "message" => 'Profile picture saved',
+
+        ];
+        return response()->json($data);
+    }
     public function fetchUserAccountDetails() 
     {
         $user = auth()->user();
@@ -338,16 +357,28 @@ class AuthController extends Controller
     }
     private function getUserCompletedSteps($user)
     {
-        $team_member_exists = User::where('parent_user_id',$user->id)->exists();
+        $teamMemberExists = User::where('parent_user_id',$user->id)->exists();
         $activityCount = UserActivity::where('user_id', $user->id)
         ->count();
-
+        $totalSteps = 5;
+        $createAccount = true;
+        $completedSteps = (
+            1 +                             // Create Account
+            ($user->is_verified ? 1 : 0) +  // Confirm Email
+            ($activityCount > 0 ? 1 : 0) +  // Download App
+            ($teamMemberExists ? 1 : 0) + // Add Team Member
+            1                               // Add Card
+        );
+    
+        // Calculate the percentage of steps completed
+        $percentageCompleted = ($completedSteps / $totalSteps) * 100;
         return [
-            'create_account' => true,
+            'create_account' => $createAccount,
             'confirm_email' => $user->is_verified,
             'download_app' => $activityCount > 0 ? true : false,
-            'add_team_member' => $team_member_exists,
+            'add_team_member' => $teamMemberExists,
             'add_card' => true,
+            'percentage' => $percentageCompleted
         ];
     }
 }

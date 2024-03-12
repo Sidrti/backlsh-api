@@ -18,8 +18,8 @@ class WebsiteScreenshotController extends Controller
     {
         $request->validate([
             'user_id' => 'required|exists:users,id',
-            'start_time' => 'nullable|string|date_format:h:i A',
-            'end_time' => 'nullable|string|date_format:h:i A|after_or_equal:start_time',
+            // 'start_time' => 'nullable|string|date_format:h:i A',
+            // 'end_time' => 'nullable|string|date_format:h:i A|after_or_equal:start_time',
         ]);
         $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
         $endDate = Carbon::parse($request->input('end_date', Carbon::now()));

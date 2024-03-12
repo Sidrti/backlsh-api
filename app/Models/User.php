@@ -23,6 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'profile_picture',
         'login_type',
         'role',
         'parent_user_id',
@@ -55,5 +56,9 @@ class User extends Authenticatable
     public function attendanceSchedules()
     {
       return $this->belongsToMany(AttendanceSchedule::class);
+    }
+    public function getProfilePictureAttribute($value)
+    {
+        return $value != null ? config('app.asset_url') . $value : $value;
     }
 }

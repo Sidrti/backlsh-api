@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function () {
         
         Route::group(['prefix' => 'website'], function () {
             Route::get('/auth/user', [AuthController::class, 'me']);
+            Route::post('/auth/user/update', [AuthController::class, 'meUpdate']);
             Route::get('/auth/account-details', [AuthController::class, 'fetchUserAccountDetails']);
             Route::post('/auth/forget-password/change-password', [AuthController::class, 'forgetPasswordChangePassword']);
             Route::get('/auth/send-verification-link', [AuthController::class, 'sendVerificationLink']);
