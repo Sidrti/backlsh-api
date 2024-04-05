@@ -16,7 +16,7 @@ class PaymentController extends Controller
     public function createCheckout(Request $request)
     {
         $stripe =  $request->user()
-            ->newSubscription('default', 'price_1OgjuEH8GTBeCWthkvUf6ox8')
+            ->newSubscription('default', 'price_1P2AD6SIjbH04JRm6Q3SbSqH')
             ->allowPromotionCodes()
             ->checkout([
                 'success_url' => config('app.success_url'),
@@ -24,20 +24,5 @@ class PaymentController extends Controller
             ]);
             return response($stripe->url);
             return redirect()->away($stripe->url);
-    }
-    private function createSession($qty,$email)
-    {
-        $baseUrl = url('/');
-        $checkout_session = \Stripe\Checkout\Session::create([
-            'customer_email' => $email,
-            'line_items' => [[
-              'price' => 'price_1OgjuEH8GTBeCWthkvUf6ox8',
-              'quantity' => $qty,
-            ]],
-            'mode' => 'subscription',
-            'success_url' => $baseUrl . '/payment/success',
-            'cancel_url' => $baseUrl . '/payment/cancel',
-          ]);
-          return $checkout_session;
     }
 }
