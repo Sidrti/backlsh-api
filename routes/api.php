@@ -5,6 +5,7 @@ use App\Http\Controllers\V1\App\UserActivityController;
 use App\Http\Controllers\V1\AuthController;
 use App\Http\Controllers\v1\Website\AttendanceController;
 use App\Http\Controllers\v1\Website\DashboardController;
+use App\Http\Controllers\V1\Website\PaymentController;
 use App\Http\Controllers\v1\Website\RealtimeController;
 use App\Http\Controllers\v1\Website\ReportController;
 use App\Http\Controllers\v1\Website\TeamController;
@@ -69,6 +70,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/productivity-ratings',[UserProcessRatingController::class,'fetchProcessRating']);
             Route::post('/productivity-ratings/create',[UserProcessRatingController::class,'createProcessRating']);
             
+            Route::post('/payment/checkout', [PaymentController::class,'createCheckout']);
         });
     });
 });
