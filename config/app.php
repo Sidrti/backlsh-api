@@ -60,6 +60,10 @@ return [
 
     'website_url' => env('WEBSITE_URL'),
 
+    'success_url' => env('SUCCESS_URL'),
+
+    'cancel_url' => env('CANCEL_URL'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
