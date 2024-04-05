@@ -16,7 +16,7 @@ class PaymentController extends Controller
     public function createCheckout(Request $request)
     {
         $stripe =  $request->user()
-            ->newSubscription('default', 'price_1P2AD6SIjbH04JRm6Q3SbSqH')
+            ->newSubscription('default', 'price_1OgjuEH8GTBeCWthkvUf6ox8')
             ->allowPromotionCodes()
             ->checkout([
                 'success_url' => config('app.success_url'),
