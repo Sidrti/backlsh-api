@@ -72,13 +72,13 @@ class TeamController extends Controller
         $tenDaysAgo = $currentDate->copy()->subDays(10)->toDateString();
     
         // Fetch team members along with their activity status
-        $teamMembers = User::select('users.id','users.name','users.email')
+        $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture')
             ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
              ->where(function ($query) use ($userId) {
                 $query->where('users.parent_user_id', $userId)
                       ->orWhere('users.id', $userId);
                 })
-            ->groupBy('users.id','users.name','users.email')
+            ->groupBy('users.id','users.name','users.email','users.profile_picture')
             ->selectRaw('IF(MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
             ->get();
 

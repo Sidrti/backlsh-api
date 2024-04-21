@@ -29,6 +29,9 @@ class User extends Authenticatable
         'role',
         'parent_user_id',
         'status',
+        'trial_ends_at',
+        'pm_type',
+        'pm_last_four',
         'is_verified',
         'verification_token'
 
@@ -52,6 +55,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'trial_ends_at' => 'datetime:Y-m-d',
     ];
 
     public function attendanceSchedules()
@@ -61,5 +65,9 @@ class User extends Authenticatable
     public function getProfilePictureAttribute($value)
     {
         return $value != null ? config('app.asset_url') . $value : $value;
+    }
+    public function userActivities()
+    {
+        return $this->hasMany(UserActivity::class);
     }
 }

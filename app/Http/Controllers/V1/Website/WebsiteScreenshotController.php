@@ -26,12 +26,14 @@ class WebsiteScreenshotController extends Controller
         $startTime = $request->has('start_time') ? Carbon::createFromFormat('h:i A', $request->input('start_time'))->format('H:i:s') : Carbon::now()->format('H:00:00');
         $endTime = $request->has('end_time') ? Carbon::createFromFormat('h:i A', $request->input('end_time'))->format('H:i:s') : Carbon::now()->addHour()->format('H:00:00');
 
+        // dd($startTime);
         $screenshots = UserScreenshot::where('user_screenshots.user_id', $request->input('user_id'))
+        ->select('user_screenshots.*','processes.id as process_id','processes.process_name','processes.type')
         ->join('processes','processes.id','user_screenshots.process_id')
         ->whereBetween('user_screenshots.created_at', [$startDate->startOfDay()->format('Y-m-d H:i:s'), $endDate->endOfDay()->format('Y-m-d H:i:s')])
-        ->whereTime('user_screenshots.created_at', '>=', $startTime)
-        ->whereTime('user_screenshots.created_at', '<=', $endTime)
-        ->get();
+        ->WhereTime('user_screenshots.created_at', '>=', $startTime)
+        ->WhereTime('user_screenshots.created_at', '<=', $endTime)
+        ->get(); 
 
         $data =  [
             'screenshots' => $screenshots

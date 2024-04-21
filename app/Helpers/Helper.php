@@ -2,10 +2,18 @@
 
 namespace App\Helpers;
 
+use App\Models\AttendanceSchedule;
+use App\Models\Process;
 use App\Models\User;
 use App\Models\UserActivity;
+use App\Models\UserProcessRating;
 use Carbon\Carbon;
+use Exception;
 use File;
+use Illuminate\Support\Facades\DB;
+use Stripe\Price;
+use Stripe\Stripe;
+use Stripe\Subscription;
 
 class Helper
 {
@@ -20,13 +28,18 @@ class Helper
             return 'APPLICATION';
         }
     }
-    public static function computeActivityProductivityStatus($process)
+    public static function computeActivityProductivityStatus($process,$userId)
     {
-        return 'PRODUCTIVE';
+        $userProcessRatings = UserProcessRating::join('processes','processes.id','user_process_ratings.process_id')
+        ->where('user_process_ratings.user_id',$userId)
+        ->where('processes.process_name',$process)
+        ->first();
+
+        return isset($userProcessRatings->rating) ? $userProcessRatings->rating : 'NEUTRAL' ;
     }
     public static function computeSubActivityProductivityStatus($url)
     {
-        return 'NON PRODUCTIVE';
+        return 'NONPRODUCTIVE';
     }
     public static function saveImageToServer($file,$dir)
     {
@@ -46,6 +59,27 @@ class Helper
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
        // mail($to, $subject, $body,$headers);
+
+       $credentials = \SendinBlue\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', config('app.sendinblue_key'));
+       $apiInstance = new \SendinBlue\Client\Api\TransactionalEmailsApi(new \GuzzleHttp\Client(), $credentials);
+
+       $sendSmtpEmail = new \SendinBlue\Client\Model\SendSmtpEmail([
+           'subject' => $subject,
+           'sender' => ['name' => 'Backlsh', 'email' => 'hi@backlsh.com'],
+           'replyTo' => ['name' => 'Backlsh', 'email' => 'hi@backlsh.com'],
+           'to' => [['name' => 'Max Mustermann', 'email' => $to]],
+        //    'htmlContent' => '<html><body><h1>This is a transactional email {{params.bodyMessage}}</h1></body></html>',
+            'htmlContent' => $body,
+           'params' => ['bodyMessage' => 'made just for you!']
+       ]);
+
+       try {
+           $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
+           return true;
+       } catch(Exception $e) {
+            return false;
+           echo $e->getMessage(),PHP_EOL;
+}
     }
     public static function calculateTotalHoursByUserId($userId,$startDate,$endDate,$status = null)
     {
@@ -55,7 +89,6 @@ class Helper
         $userActivities = UserActivity::where('user_id', $userId)
         ->whereBetween('start_datetime', [$startDate, $endDate])
         ->get();
-
         $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
 
         return round($filteredActivities->sum(function ($activity) {
@@ -90,6 +123,13 @@ class Helper
                 ->whereDate('start_datetime', $date->toDateString())
                 ->get();
     
+                $schedule = AttendanceSchedule::where('start_date', '<=', $date)
+                ->where('end_date', '>=', $date)
+                ->whereHas('users', function ($query) use ($userId) {
+                    $query->where('user_id', $userId);
+                })
+                ->first();
+
             // Calculate the total working hours for the day
             $totalHours = 0;
             foreach ($userActivities as $activity) {
@@ -98,9 +138,18 @@ class Helper
             }
     
             // If the total working hours for the day exceed 4, increment the days present counter
-            if ($totalHours > 4) {
-                $daysPresent++;
+            if($schedule) 
+            {
+                ($totalHours >= $schedule->min_hours) ? $daysPresent++ : (($totalHours > 0) ? $daysPresent = $daysPresent + 0.5 : $daysPresent);
             }
+            else 
+            {
+                if ($totalHours > 1) {
+                    $daysPresent++;
+                }
+            }
+            
+
             $totalDays++;
         }
     
@@ -109,7 +158,7 @@ class Helper
     public static function getDomainFromUrl($url)
     {
         $parsedUrl = parse_url($url);
-        $domain = isset($parsedUrl['host']) ? $parsedUrl['host'] : '';
+        $domain = isset($parsedUrl['host']) ? $parsedUrl['host'] : $url;
 
         return $domain;
     }
@@ -139,9 +188,53 @@ class Helper
             'login_type' => $loginType,
             'role' => $role,
             'is_verified' => $loginType == 2 || $loginType == 3 ? 1 : 0,
-            'parent_user_id' => $parentId
+            'parent_user_id' => $parentId,
+            'trial_ends_at' => now()->addDays(10),
         ]);
 
         return $user;
+    }
+    public static function getUserSubscription($userId)
+    {
+        Stripe::setApiKey(config('app.stripe_key'));
+        $user = User::find($userId);
+        $teamMemberCount = User::where('parent_user_id',$user->id)->count() + 1;
+        if($user->subscribed()) {
+            $subscription = $user->subscriptions()->first();
+            $price = Price::retrieve($subscription->stripe_price);
+            $subs = Subscription::retrieve($subscription->stripe_id);
+            $current_period_end = Carbon::createFromTimestamp($subs->current_period_end);
+            $current_period_start = Carbon::createFromTimestamp($subs->current_period_start);
+            $priceAmount = $price->unit_amount;
+            $totalAmount = $price->unit_amount * $teamMemberCount ;
+            $currency = $price->currency;
+        }
+        else {
+            $priceAmount = 0;
+            $totalAmount = 0 ;
+            $currency = '$';
+            $current_period_end = $user->created_at;
+            $current_period_start = $user->trial_ends_at;
+        }
+        
+        
+
+        $remainingTrialDays = 0;
+        if($user->onTrial()) {
+            $currentDate = Carbon::now();
+
+            $remainingTrialDays = $currentDate->diffInDays($user->trial_ends_at);
+        }
+        return [
+            'trial' => $user->onTrial(),
+            'subscribed' => $user->subscribed(),
+            'price' => $priceAmount,
+            'total_price' => $totalAmount,
+            'currency' => $currency,
+            'current_period_end' => $current_period_end,
+            'current_period_start' => $current_period_start,
+            'member_count' => $teamMemberCount,
+            'remaining_trial_days' => $remainingTrialDays
+        ];
     }
 }
