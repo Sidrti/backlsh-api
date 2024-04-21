@@ -10,4 +10,9 @@ class Process extends Model
     use HasFactory;
 
     protected $fillable = ['process_name','icon','type'];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

@@ -71,6 +71,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/productivity-ratings/create',[UserProcessRatingController::class,'createProcessRating']);
             
             Route::post('/payment/checkout', [PaymentController::class,'createCheckout']);
+            Route::get('/payment/billing-details', [PaymentController::class,'fetchBillingDetails']);
+            Route::get('/payment/redirect-billing-portal', [PaymentController::class,'rediectToBilling']);
         });
     });
 });

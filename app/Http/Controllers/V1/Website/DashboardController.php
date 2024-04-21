@@ -20,7 +20,7 @@ class DashboardController extends Controller
 
         $totalHoursWorked = Helper::calculateTotalHoursByParentId($userId,$startDate,$endDate);
         $totalProductiveHours = Helper::calculateTotalHoursByParentId($userId,$startDate,$endDate,'PRODUCTIVE');
-        $totalNonProductiveHours = Helper::calculateTotalHoursByParentId($userId,$startDate,$endDate,'NON_PRODUCTIVE');
+        $totalNonProductiveHours = Helper::calculateTotalHoursByParentId($userId,$startDate,$endDate,'NONPRODUCTIVE');
         $totalNeutralHours = Helper::calculateTotalHoursByParentId($userId,$startDate,$endDate,'NEUTRAL');
 
         $teamWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId,$startDate,$endDate,true);

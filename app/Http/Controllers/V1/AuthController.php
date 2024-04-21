@@ -251,12 +251,14 @@ class AuthController extends Controller
         if (Str::startsWith($token, 'Bearer ')) {
             $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
         }
-        
+       $subscription = (Helper::getUserSubscription(auth()->user()->id));
+       
           $data = [
             'status_code' => 1,
             'data' => [
                 'user' => auth()->user(),
                 'token' => $token,
+                'subscription' => $subscription
             ],
             "message" => 'User details fetched',
 
@@ -286,13 +288,12 @@ class AuthController extends Controller
     {
         $user = auth()->user();
         $userSteps = $this->getUserCompletedSteps($user);
-        $subscription = [
-            'days_left' => 9,
-            'sub_title' => 'left in your free trial',
-            'show_button' => true,
-            'button_text' => 'UPGRADE NOW',
-            'button_link' => '/dashboard'
-        ];
+        $subscription = Helper::getUserSubscription(auth()->user()->id);
+        $subscription['sub_title'] = $user->subscribed() ? 'Premium Member' : 'left in your trial';
+        $subscription['title'] = $user->subscribed() ? 'Subscribed' : $subscription['remaining_trial_days'].' Days';
+        $subscription['show_button'] = !$user->subscribed() ;
+        $subscription['button_text'] = 'UPGRADE NOW';
+        $subscription['button_link'] = '/dashboard';
         $data = [
             'status_code' => 1,
             'data' => [
@@ -358,26 +359,26 @@ class AuthController extends Controller
     private function getUserCompletedSteps($user)
     {
         $teamMemberExists = User::where('parent_user_id',$user->id)->exists();
-        $activityCount = UserActivity::where('user_id', $user->id)
-        ->count();
+        $activityCount = UserActivity::where('user_id', $user->id)->count();
         $totalSteps = 5;
         $createAccount = true;
+        $subscribed = auth()->user()->subscribed();
         $completedSteps = (
-            1 +                             // Create Account
+            $createAccount +                             // Create Account
             ($user->is_verified ? 1 : 0) +  // Confirm Email
             ($activityCount > 0 ? 1 : 0) +  // Download App
             ($teamMemberExists ? 1 : 0) + // Add Team Member
-            1                               // Add Card
+            $subscribed                               // Add Card
         );
     
         // Calculate the percentage of steps completed
         $percentageCompleted = ($completedSteps / $totalSteps) * 100;
         return [
             'create_account' => $createAccount,
-            'confirm_email' => $user->is_verified,
+            'confirm_email' => $user->is_verified ? true : false,
             'download_app' => $activityCount > 0 ? true : false,
             'add_team_member' => $teamMemberExists,
-            'add_card' => true,
+            'add_card' => $subscribed,
             'percentage' => $percentageCompleted
         ];
     }

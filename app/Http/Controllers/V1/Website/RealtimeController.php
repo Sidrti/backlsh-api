@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V1\Website;
 
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +17,10 @@ class RealtimeController extends Controller
         $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
         if($request->has('filter')) {
             if($request->filter == 'PRODUCTIVE_FROM_30_MIN') {
-                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId);
+                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId,0.5,'PRODUCTIVE');
             }
             else {
-                $realtimeUpdates = $this->getOnlineMembersUsageNonProductiveFilter($userId);
+                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId,0.5,'UNPRODUCTIVE');
             } 
         }
         else {
@@ -42,27 +43,70 @@ class RealtimeController extends Controller
     }
     private function getOnlineMembersUsage($userId,$time)
     {
-        $usersProcess = DB::table('user_activities as ua')
-            ->select('u.id as user_id', 'u.name', 'p.process_name', 'ua.productivity_status')
-            ->join('users as u', 'u.id', '=', 'ua.user_id')
-            ->join('processes as p', 'p.id', '=', 'ua.process_id')
-            ->join(DB::raw('(SELECT user_id, MAX(start_datetime) AS latest_datetime
-                            FROM user_activities
-                            GROUP BY user_id) AS latest_activities'), function($join) {
-                                $join->on('ua.user_id', '=', 'latest_activities.user_id')
-                                    ->on('ua.start_datetime', '=', 'latest_activities.latest_datetime');
-                            })
-            ->where(function ($query) use ($userId) {
-                $query->where('u.parent_user_id', $userId)
-                    ->orWhere('u.id', $userId);
-            })
-            ->where('ua.end_datetime', '>=', $time) // Filter for last activity within 10 minutes
-            ->groupBy('u.id', 'u.name', 'p.process_name', 'ua.productivity_status')
-            ->get();
-
-        return $usersProcess;
+        // $usersProcess = DB::table('user_activities as ua')
+        //     ->select('u.id as user_id', 'u.name', 'p.process_name', 'ua.productivity_status')
+        //     ->join('users as u', 'u.id', '=', 'ua.user_id')
+        //     ->join('processes as p', 'p.id', '=', 'ua.process_id')
+        //     ->join(DB::raw('(SELECT user_id, MAX(start_datetime) AS latest_datetime
+        //                     FROM user_activities
+        //                     GROUP BY user_id) AS latest_activities'), function($join) {
+        //                         $join->on('ua.user_id', '=', 'latest_activities.user_id')
+        //                             ->on('ua.start_datetime', '=', 'latest_activities.latest_datetime');
+        //                     })
+        //     ->where(function ($query) use ($userId) {
+        //         $query->where('u.parent_user_id', $userId)
+        //             ->orWhere('u.id', $userId);
+        //     })
+        //     ->where('ua.end_datetime', '>=', $time) // Filter for last activity within 10 minutes
+        //     ->groupBy('u.id', 'u.name', 'p.process_name', 'ua.productivity_status')
+        //     ->get();
+        $users = User::with(['userActivities' => function ($query) {
+            // $query->latest()->take(1);
+            $query->latest()->take(1)->with('process');
+        }])
+        ->where(function ($query) use ($userId) {
+            $query->where('parent_user_id', $userId)
+                ->orWhere('id', $userId);
+        })
+        ->get();
+        
+        $now = Carbon::now();
+        
+        $users->transform(function ($user) use ($now) {
+            $lastActivity = $user->userActivities->first();
+        
+            if ($lastActivity && $lastActivity->created_at->diffInMinutes($now) < 10) {
+                $user->status = 'ONLINE';
+            } else {
+                $user->status = 'OFFLINE';
+            }
+            $data = [
+                'user_id' => $user->id,
+                'name' =>$user->name,
+                'profile_picture' => $user->profile_picture
+            ];
+        
+            if ($lastActivity) {
+                $data['process_id'] = $lastActivity->process_id;
+                $data['process_name'] = $lastActivity->process->process_name;
+                $data['process_type'] = $lastActivity->process->type;
+                $data['productivity_status'] = $lastActivity->productivity_status;
+                $data['last_working_datetime'] = $lastActivity->created_at;
+                $data['status'] = $user->status;
+            } else {
+                $data['process_id'] = null;
+                $data['process_name'] = null;
+                $data['process_type'] = null;
+                $data['productivity_status'] = null;
+                $data['last_working_datetime'] = null;
+                $data['status'] = $user->status;
+            }
+        
+            return $data;
+        });
+        return $users;
     }
-    private function getOnlineMembersUsageProductiveFilter($userId,$threshold=0.5)
+    private function getOnlineMembersUsageProductiveFilter($userId,$threshold=0.5,$status)
     {
         // Calculate the timestamp 30 minutes ago
         $thirtyMinutesAgo = Carbon::now()->subMinutes(30);
@@ -106,7 +150,19 @@ class RealtimeController extends Controller
         $mostlyProductiveUsers = [];
         foreach ($userRatios as $user_id => $ratio) {
             $productiveRatio = $ratio['productive_count'] / $ratio['total_count'];
-            if ($productiveRatio >= $threshold) {
+            if ($productiveRatio >= $threshold && $status == 'PRODUCTIVE') {
+                $mostlyProductiveUsers[] = [
+                    'user_id' => $ratio['user_id'],
+                    'name' =>$ratio['name'],
+                    'process_name' =>$ratio['process_name'],
+                    'productivity_status' => $ratio['productivity_status'],
+                    'title' => $ratio['title'],
+                    'website_url' => $ratio['website_url'],
+                    'productive_ratio' => $productiveRatio,
+                    
+                ];
+            }
+            else if ($productiveRatio < $threshold && $status == 'UNPRODUCTIVE') {
                 $mostlyProductiveUsers[] = [
                     'user_id' => $ratio['user_id'],
                     'name' =>$ratio['name'],

@@ -44,16 +44,16 @@ class UserActivityController extends Controller
                             'process_name' => Helper::getDomainFromUrl($subProcess['url']), 
                             'type' => 'WEBSITE', 
                         ]);  
+                        UserSubActivity::create([
+                            'user_activity_id' => $userActivity->id,
+                            'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
+                            'title' => $subProcess['title'],
+                            'website_url' => $subProcess['url'],
+                            'productivity_status' => $subProcess['productivityStatus'],
+                            'start_datetime' => $subProcess['startDateTime'],
+                            'end_datetime' => $subProcess['endDateTime'],
+                        ]);
                     }
-                    UserSubActivity::create([
-                        'user_activity_id' => $userActivity->id,
-                        'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
-                        'title' => $subProcess['title'],
-                        'website_url' => $subProcess['url'],
-                        'productivity_status' => $subProcess['productivityStatus'],
-                        'start_datetime' => $subProcess['startDateTime'],
-                        'end_datetime' => $subProcess['endDateTime'],
-                    ]);
                 }
             }
         }
@@ -108,7 +108,7 @@ class UserActivityController extends Controller
                             'startDateTime' => $timestamp,
                             'endDateTime' => $timestamp,
                             'title' => $data['Title'],
-                            'productivityStatus' => Helper::computeSubActivityProductivityStatus($url),
+                            'productivityStatus' => Helper::computeActivityProductivityStatus($url,auth()->user()->id),
                         ]
                     ];
                 }
@@ -117,7 +117,7 @@ class UserActivityController extends Controller
                     'startDateTime' => $timestamp,
                     'endDateTime' => $timestamp,
                     'type' => $processType,
-                    'productivityStatus' => Helper::computeActivityProductivityStatus($processName),
+                    'productivityStatus' => Helper::computeActivityProductivityStatus($processName,auth()->user()->id),
                     'subProcess' => $subProcessData
                 ];
             } 
