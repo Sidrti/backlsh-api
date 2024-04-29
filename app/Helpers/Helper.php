@@ -74,10 +74,10 @@ class Helper
        ]);
 
        try {
-           $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
+         //  $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
            return true;
        } catch(Exception $e) {
-            return false;
+            return $e->getMessage();
            echo $e->getMessage(),PHP_EOL;
 }
     }
@@ -210,8 +210,8 @@ class Helper
             $currency = $price->currency;
         }
         else {
-            $priceAmount = 0;
-            $totalAmount = 0 ;
+            $priceAmount = config('app.unit_price');
+            $totalAmount = config('app.unit_price') * $teamMemberCount ;
             $currency = '$';
             $current_period_end = $user->created_at;
             $current_period_start = $user->trial_ends_at;

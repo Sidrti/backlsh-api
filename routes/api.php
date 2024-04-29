@@ -26,6 +26,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/auth/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'verifyEmail']);
         Route::post('/auth/forget-password/send-verification-link', [AuthController::class, 'forgetPasswordSendVerificationLink']);
         Route::get('/auth/forget-password/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'forgetPasswordVerifyEmail']);
+        Route::get('/auth/app-link', [AuthController::class, 'fetchBacklshAppUrl']);
     });
 
     Route::group(['prefix' => 'app'], function () {  
@@ -73,6 +74,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/payment/checkout', [PaymentController::class,'createCheckout']);
             Route::get('/payment/billing-details', [PaymentController::class,'fetchBillingDetails']);
             Route::get('/payment/redirect-billing-portal', [PaymentController::class,'rediectToBilling']);
+
         });
     });
 });
