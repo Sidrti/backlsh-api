@@ -50,13 +50,32 @@ class UserProcessRatingController extends Controller
     }
     public function fetchProcessRating(Request $request)
     {
-        $processRatings = Process::leftJoin('user_process_ratings','user_process_ratings.process_id','processes.id')
-        ->leftJoin('user_activities', 'processes.id', '=', 'user_activities.process_id')
-        ->select('processes.id','processes.process_name','processes.type','user_process_ratings.rating',  DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)/3600) AS total_time'))
-        ->distinct('processes.process_name')
-        ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'user_process_ratings.rating')
-        ->orderByDesc('total_time')
-        ->get();
+        // $processRatings = Process::leftJoin('user_process_ratings','user_process_ratings.process_id','processes.id')
+        // ->leftJoin('user_activities', 'processes.id', '=', 'user_activities.process_id')
+        // ->select('processes.id','processes.process_name','processes.type','user_process_ratings.rating',  DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)/3600) AS total_time'))
+        // ->distinct('processes.process_name')
+        // ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'user_process_ratings.rating')
+        // ->orderByDesc('total_time')
+        // ->get();
+
+        $processRatings = Process::leftJoin('user_activities', 'processes.id', '=', 'user_activities.process_id')
+            ->leftJoin('user_process_ratings', function ($join) {
+                $join->on('user_process_ratings.process_id', '=', 'processes.id')
+                    ->where('user_process_ratings.user_id', '=', auth()->user()->id); // Assuming you have access to the authenticated user's ID
+            })
+            ->select(
+                'processes.id',
+                'processes.process_name',
+                'processes.type',
+                DB::raw('COALESCE(user_process_ratings.rating, "NEUTRAL") AS rating'), // Use COALESCE to return null if the user has not rated
+                DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) / 3600) AS total_time')
+            )
+            ->distinct('processes.process_name')
+            ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'user_process_ratings.rating')
+            ->orderByDesc('total_time')
+            ->where('processes.process_name','!=','-1')
+            ->get();
+
 
         return response()->json([
             'status_code' => 1,

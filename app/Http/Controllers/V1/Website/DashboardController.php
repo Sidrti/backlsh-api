@@ -237,17 +237,20 @@ class DashboardController extends Controller
         // Find the peak hours with highest productivity counts
         $maxProductivity = max($hourlyProductivity);
         $peakHours = [];
-        for ($hour = 0; $hour < 24; $hour++) {
-            if ($hourlyProductivity[$hour] === $maxProductivity) {
-                // Format hours with AM/PM
-                $startHourFormatted = $hour >= 12 ? ($hour === 12 ? '12 PM' : ($hour - 12) . ' PM') : ($hour === 0 ? '12 AM' : $hour . ' AM');
-                $endHourFormatted = (($hour + 1) % 24) >= 12 ? ((($hour + 1) % 24) === 12 ? '12 PM' : ((($hour + 1) % 24) - 12) . ' PM') : ((($hour + 1) % 24) === 0 ? '12 AM' : (($hour + 1) % 24) . ' AM');
-    
-                // Construct the formatted peak hour string
-                $peakHours[] = "$startHourFormatted - $endHourFormatted";
+        if(count($userActivities) > 0) {
+            for ($hour = 0; $hour < 24; $hour++) {
+                if ($hourlyProductivity[$hour] === $maxProductivity) {
+                    // Format hours with AM/PM
+                    $startHourFormatted = $hour >= 12 ? ($hour === 12 ? '12 PM' : ($hour - 12) . ' PM') : ($hour === 0 ? '12 AM' : $hour . ' AM');
+                    $endHourFormatted = (($hour + 1) % 24) >= 12 ? ((($hour + 1) % 24) === 12 ? '12 PM' : ((($hour + 1) % 24) - 12) . ' PM') : ((($hour + 1) % 24) === 0 ? '12 AM' : (($hour + 1) % 24) . ' AM');
+        
+                    // Construct the formatted peak hour string
+                    $peakHours[] = "$startHourFormatted - $endHourFormatted";
+                }
             }
+        
         }
-    
+
         return $peakHours;
     }    
 

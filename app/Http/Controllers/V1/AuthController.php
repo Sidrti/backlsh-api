@@ -5,9 +5,12 @@ use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserActivity;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
 
@@ -55,7 +58,7 @@ class AuthController extends Controller
             ];
             $body = view('email.verification_email', $data)->render();
             $subject = 'Verify your email';
-            Helper::sendEmail($user->email,$subject,$body);
+            dd(Helper::sendEmail($user->email,$subject,$body));
 
             $response = [
                 'status_code' => 1,
@@ -356,6 +359,12 @@ class AuthController extends Controller
             return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not registered']);
         }
     }
+    public function fetchBacklshAppUrl()
+    {
+        $filePath = config('app.app_setup_link');
+        return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
+    }
+       
     private function getUserCompletedSteps($user)
     {
         $teamMemberExists = User::where('parent_user_id',$user->id)->exists();

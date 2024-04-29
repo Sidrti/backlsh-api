@@ -28,13 +28,15 @@ class UserActivityController extends Controller
                     'type' => $activity['type'], 
                 ]);
 
-                $userActivity = UserActivity::create([
-                    'user_id' => $userId,
-                    'process_id' => $process->id,
-                    'productivity_status' => $activity['productivityStatus'],
-                    'start_datetime' => $activity['startDateTime'],
-                    'end_datetime' => $activity['endDateTime'],
-                ]);
+                if($activity['endDateTime'] != '' && $activity['endDateTime'] != null) {
+                    $userActivity = UserActivity::create([
+                        'user_id' => $userId,
+                        'process_id' => $process->id,
+                        'productivity_status' => $activity['productivityStatus'],
+                        'start_datetime' => $activity['startDateTime'],
+                        'end_datetime' => $activity['endDateTime'],
+                    ]);
+                }
             
                 // Insert sub-processes
                 foreach ($activity['subProcess'] as $subProcess) {
@@ -43,16 +45,18 @@ class UserActivityController extends Controller
                         $websiteProcess = Process::firstOrCreate([
                             'process_name' => Helper::getDomainFromUrl($subProcess['url']), 
                             'type' => 'WEBSITE', 
-                        ]);  
-                        UserSubActivity::create([
-                            'user_activity_id' => $userActivity->id,
-                            'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
-                            'title' => $subProcess['title'],
-                            'website_url' => $subProcess['url'],
-                            'productivity_status' => $subProcess['productivityStatus'],
-                            'start_datetime' => $subProcess['startDateTime'],
-                            'end_datetime' => $subProcess['endDateTime'],
                         ]);
+                        if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null) { 
+                            UserSubActivity::create([
+                                'user_activity_id' => $userActivity->id,
+                                'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
+                                'title' => $subProcess['title'],
+                                'website_url' => $subProcess['url'],
+                                'productivity_status' => $subProcess['productivityStatus'],
+                                'start_datetime' => $subProcess['startDateTime'],
+                                'end_datetime' => $subProcess['endDateTime'],
+                            ]);
+                        }  
                     }
                 }
             }

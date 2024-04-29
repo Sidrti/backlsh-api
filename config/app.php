@@ -68,6 +68,11 @@ return [
 
     'sendinblue_key' => env('SENDINBLUE_KEY'),
 
+    'media_base_url' => env('MEDIA_BASE_URL'),
+
+    'app_setup_link' => env('APP_SETUP_LINK'),
+
+    'unit_price' => env('UNIT_PRICE'),
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
