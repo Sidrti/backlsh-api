@@ -31,6 +31,8 @@ class DashboardController extends Controller
 
         $totalMembersInTeam = $this->getTotalTeamCount($userId);
 
+        $productivityTips = $this->getProductivityTips();
+
         $data =  [
             'total_time_worked' => $totalHoursWorked,
             'total_productive_hours' => $totalProductiveHours,
@@ -40,7 +42,8 @@ class DashboardController extends Controller
             'today_online_member_count' => $todayOnlineMemberCount,
             'today_team_attendance' => $todayTeamAttendance,
             'top_members' => $topMembers,
-            'total_members' => $totalMembersInTeam
+            'total_members' => $totalMembersInTeam,
+            'tips' => $productivityTips
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -61,6 +64,8 @@ class DashboardController extends Controller
         $userThisMonthRank = $this->getUserRankOfmonth($userId);
         $userPeekHours = $this->getUserPeekHours($userId);
 
+        $productivityTips = $this->getProductivityTips();
+
         $data =  [
             'total_time_worked' => $totalHoursWorked,
             'total_productive_hours' => $totalProductiveHours,
@@ -69,13 +74,15 @@ class DashboardController extends Controller
             'user_working_trend' => $userWorkingTrend,
             'month_user_attendance' => $monthUserAttendance,
             'month_user_rank' => $userThisMonthRank,
-            'user_peek_hours' => $userPeekHours
+            'user_peek_hours' => $userPeekHours,
+            'tips' => $productivityTips
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
     private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
     {
         $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
+        ->join('processes','processes.id','user_activities.process_id')
         // ->where('users.parent_user_id', $userId)
         // ->orWhere('users.id',$userId)
         // ->where('user_activities.user_id', $userId)
@@ -87,6 +94,7 @@ class DashboardController extends Controller
                 $query->where('users.id', $userId);
             }
         })
+        ->where('processes.process_name','!=','-1')
         ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
         ->get();
 
@@ -252,6 +260,10 @@ class DashboardController extends Controller
         }
 
         return $peakHours;
+    }
+    private function getProductivityTips()
+    {
+        return ["Avoid using unproductive websites and application. Also keep your mobile phone in focus mode so as to avoid distractions"];
     }    
 
 }

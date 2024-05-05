@@ -71,6 +71,7 @@ class ReportController extends Controller
             DB::raw('round(SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime))/3600,1) AS total_time'),
         )
         ->where('user_activities.user_id', $userId)
+        ->where('processes.process_name','!=','-1')
         ->whereBetween('user_activities.start_datetime', [$startDate, $endDate])
         ->groupBy('user_activities.process_id', 'processes.process_name','user_activities.productivity_status','processes.type')
         ->get();
@@ -106,6 +107,7 @@ class ReportController extends Controller
         ->where('user_activities.process_id', $processId)
         ->where('user_sub_activities.website_url','!=','')
         ->where('user_sub_activities.website_url','!=','-1')
+        ->where('processes.process_name','!=','-1')
         ->orderBy('total_time','desc')
         ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
         ->groupBy('user_activities.process_id', 'user_sub_activities.website_url','user_sub_activities.productivity_status','user_sub_activities.end_datetime','user_sub_activities.start_datetime','processes.process_name','processes.type')
@@ -128,6 +130,7 @@ class ReportController extends Controller
     private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
     {
         $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
+        ->join('processes','processes.id','user_activities.process_id')
         ->where(function ($query) use ($userId,$teamRecords) {
             if ($teamRecords) {
                 $query->where('users.parent_user_id', $userId)
@@ -136,6 +139,7 @@ class ReportController extends Controller
                 $query->where('users.id', $userId);
             }
         })
+        ->where('processes.process_name','!=','-1')
         ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
         ->get();
 
