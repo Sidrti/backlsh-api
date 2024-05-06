@@ -3,14 +3,14 @@
 use App\Http\Controllers\V1\App\ScreenshotController;
 use App\Http\Controllers\V1\App\UserActivityController;
 use App\Http\Controllers\V1\AuthController;
-use App\Http\Controllers\v1\Website\AttendanceController;
-use App\Http\Controllers\v1\Website\DashboardController;
+use App\Http\Controllers\V1\Website\AttendanceController;
+use App\Http\Controllers\V1\Website\DashboardController;
 use App\Http\Controllers\V1\Website\PaymentController;
-use App\Http\Controllers\v1\Website\RealtimeController;
-use App\Http\Controllers\v1\Website\ReportController;
-use App\Http\Controllers\v1\Website\TeamController;
+use App\Http\Controllers\V1\Website\RealtimeController;
+use App\Http\Controllers\V1\Website\ReportController;
+use App\Http\Controllers\V1\Website\TeamController;
 use App\Http\Controllers\V1\Website\UserProcessRatingController;
-use App\Http\Controllers\v1\Website\WebsiteScreenshotController;
+use App\Http\Controllers\V1\Website\WebsiteScreenshotController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
