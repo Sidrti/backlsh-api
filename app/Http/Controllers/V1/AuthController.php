@@ -338,7 +338,7 @@ class AuthController extends Controller
         $userinfoRequestUri = 'https://www.googleapis.com/oauth2/v3/userinfo';
 
         $userInfoResponse = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $request->AcessToken,
+            'Authorization' => 'Bearer ' . $request->access_token,
             'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         ])->get($userinfoRequestUri);
 
