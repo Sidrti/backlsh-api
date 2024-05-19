@@ -72,8 +72,12 @@ class ReportController extends Controller
         )
         ->where('user_activities.user_id', $userId)
         ->where('processes.process_name','!=','-1')
+        ->where('processes.process_name','!=','LockApp')
+        ->where('processes.process_name','!=','Idle')
         ->whereBetween('user_activities.start_datetime', [$startDate, $endDate])
+        ->whereBetween('user_activities.end_datetime', [$startDate, $endDate])
         ->groupBy('user_activities.process_id', 'processes.process_name','user_activities.productivity_status','processes.type')
+        ->orderByDesc('total_time')
         ->get();
 
         foreach($processData as $item) {
@@ -155,7 +159,7 @@ class ReportController extends Controller
                 case 'PRODUCTIVE':
                     $productiveHours = $hours;
                     break;
-                case 'NON_PRODUCTIVE':
+                case 'NONPRODUCTIVE':
                     $nonProductiveHours = $hours;
                     break;
                 case 'NEUTRAL':

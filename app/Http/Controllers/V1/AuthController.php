@@ -5,6 +5,7 @@ use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserActivity;
+use Exception;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -221,32 +222,26 @@ class AuthController extends Controller
     }
     public function handleGoogleCallback()
     {
-        $googleUser = Socialite::driver('google')->stateless()->user();
+        try {
+            $googleUser = Socialite::driver('google')->stateless()->user();
         
-        $user = User::where('email', $googleUser->getEmail())->first();
-
-        if (!$user) {
-            $user = Helper::createNewUser($googleUser->getName(),$googleUser->getEmail(),rand(10000,1000000),2,'ADMIN');
-
-            $message = 'Hurray '.$googleUser->getName().' ! Happy productivity.';
-        }
-        else {
             $user = User::where('email', $googleUser->getEmail())->first();
-            $message = 'Welcome back '.$googleUser->getName();
+    
+            if (!$user) {
+                $user = Helper::createNewUser($googleUser->getName(),$googleUser->getEmail(),rand(10000,1000000),2,'ADMIN');
+    
+                $message = 'Hurray '.$googleUser->getName().' ! Happy productivity.';
+            }
+            else {
+                $user = User::where('email', $googleUser->getEmail())->first();
+                $message = 'Welcome back '.$googleUser->getName();
+            }
+            $token = $user->createToken('api-token')->plainTextToken;
+            return redirect(config('app.website_url').'/social-login?token=' . $token);
         }
-        $token = $user->createToken('api-token')->plainTextToken;
-        return redirect(config('app.website_url').'/social-login?token=' . $token);
-
-        // $data = [
-        //     'status_code' => 1,
-        //     'data' => [
-        //         'user' => $user,
-        //         'token' => $token,
-        //     ],
-        //     "message" => $message,
-
-        // ];
-        // return response()->json($data);
+        catch(Exception $e) {
+            return redirect(config('app.website_url'));
+        }
     }
     public function me(Request $request)
     {

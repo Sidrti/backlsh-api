@@ -74,7 +74,7 @@ class Helper
        ]);
 
        try {
-         //  $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
+           $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
            return true;
        } catch(Exception $e) {
             return $e->getMessage();
@@ -83,17 +83,23 @@ class Helper
     }
     public static function calculateTotalHoursByUserId($userId,$startDate,$endDate,$status = null)
     {
-        // $userActivities = UserActivity::where('user_id', $userId)
-        // ->whereRaw("DATE(start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-        // ->get();
         $userActivities = UserActivity::where('user_id', $userId)
-        ->whereBetween('start_datetime', [$startDate, $endDate])
+        ->join('processes','processes.id','user_activities.process_id')
+        // ->whereBetween('start_datetime', [$startDate, $endDate])
+        // ->whereBetween('end_datetime', [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)") 
+        ->where('processes.process_name','!=','-1')
+        ->where('processes.process_name','!=','LockApp')
+        ->where('processes.process_name','!=','Idle')
         ->get();
+
         $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
 
         return round($filteredActivities->sum(function ($activity) {
             return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        }), 2);
+        }), 1);
     }
     public static function calculateTotalHoursByParentId($userId,$startDate,$endDate,$status = null)
     {
@@ -104,6 +110,11 @@ class Helper
         })
         ->join('processes','processes.id','user_activities.process_id')
         ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->where('processes.process_name','!=','-1')
+        ->where('processes.process_name','!=','LockApp')
+        ->where('processes.process_name','!=','Idle')
+        ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)") 
         ->get();
 
         $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;

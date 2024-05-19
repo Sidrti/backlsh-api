@@ -42,13 +42,50 @@
         .button:hover {
             background-color: #0056b3;
         }
+ 
+        .email-header {
+            background-color: #696cff;
+            padding: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .email-header img {
+            max-width: 60px;
+            height: auto;
+            margin-right: auto;
+            border-radius:50%;
+        }
+        .email-header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #FFFFFF;
+            flex-grow: 1;
+            text-align: center;
+        }
+         .email-footer {
+            padding: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .email-header img {
+            max-width: 60px;
+            height: auto;
+            margin-right: auto;
+        }
+ 
     </style>
 </head>
 <body>
+    
     <div class="container">
-        <div class="header">
-            <h1>Welcome to Our Team!</h1>
-        </div>
+        <div class="email-header">
+        <img src="https://backlsh.com/wp-content/uploads/2023/09/logo.jpg" alt="Backlsh Logo" >
+        <h1>Welcome to Backlsh !</h1>
+    </div>
         <div class="content">
             <p>Hello {{ $name }},</p>
             <p>Welcome to our team! Your account has been created successfully.</p>
@@ -57,9 +94,10 @@
                 <li><strong>Email:</strong> {{ $email }}</li>
                 <li><strong>Password:</strong> {{ $password }}</li>
             </ul>
+            
             <p>You can log in using the button below:</p>
             <a href="{{config('app.website_url').'/login'}}" class="button">Login</a>
-            <p>If you have any questions or need assistance, feel free to contact us.</p>
+            <p>If you have any questions or need assistance, feel free to contact us at <a href="mailto:support@backlsh.com">support@backlsh.com</a></p>
             <p>Best regards,<br>{{$adminName}}</p>
         </div>
     </div>
