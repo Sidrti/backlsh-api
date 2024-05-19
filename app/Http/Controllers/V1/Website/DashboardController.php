@@ -55,7 +55,7 @@ class DashboardController extends Controller
 
         $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate);
         $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,'PRODUCTIVE');
-        $totalNonProductiveHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,'NON_PRODUCTIVE');
+        $totalNonProductiveHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,'NONPRODUCTIVE');
         $totalNeutralHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,'NEUTRAL');
 
         $userWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId,$startDate,$endDate,false);
@@ -83,9 +83,6 @@ class DashboardController extends Controller
     {
         $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
         ->join('processes','processes.id','user_activities.process_id')
-        // ->where('users.parent_user_id', $userId)
-        // ->orWhere('users.id',$userId)
-        // ->where('user_activities.user_id', $userId)
         ->where(function ($query) use ($userId,$teamRecords) {
             if ($teamRecords) {
                 $query->where('users.parent_user_id', $userId)
@@ -93,24 +90,31 @@ class DashboardController extends Controller
             } else {
                 $query->where('users.id', $userId);
             }
+            
         })
         ->where('processes.process_name','!=','-1')
+        ->where('processes.process_name','!=','LockApp')
+        ->where('processes.process_name','!=','Idle')
         ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)") 
         ->get();
 
+   //     return $userActivities;
         $result = [];
         $nonProductiveHours = 0;
         $neutralHours = 0; 
         $productiveHours = 0;
         foreach ($userActivities as $activity) {
             $date = Carbon::parse($activity->start_datetime)->format('d-m-Y');
+            $endDate = Carbon::parse($activity->end_datetime);
             $hours = Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-          
+        
             switch ($activity->productivity_status) {
                 case 'PRODUCTIVE':
                     $productiveHours = $hours;
                     break;
-                case 'NON_PRODUCTIVE':
+                case 'NONPRODUCTIVE':
                     $nonProductiveHours = $hours;
                     break;
                 case 'NEUTRAL':
@@ -136,6 +140,7 @@ class DashboardController extends Controller
             $neutralHours = 0; 
             $productiveHours = 0;
             $hours = 0;
+
         }
 
         foreach ($result as &$day) {
