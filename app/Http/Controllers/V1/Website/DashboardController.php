@@ -180,14 +180,14 @@ class DashboardController extends Controller
     {
         $today = Carbon::today();
         //$today = '2024-02-05';
-        $topMembers = UserActivity::select('user_id', 'users.name','users.email', DB::raw('SUM(CASE WHEN productivity_status = "productive" THEN 1 ELSE 0 END) as productive_count'))
+        $topMembers = UserActivity::select('user_id', 'users.name','users.email', DB::raw('SUM(CASE WHEN productivity_status = "productive" THEN 1 ELSE 0 END) as productive_count'),  DB::raw("CONCAT('" . config('app.media_base_url') . "', users.profile_picture) as profile_picture"))
             ->join('users','users.id','user_activities.user_id')
             ->whereDate('start_datetime', $today)
             ->where(function ($query) use ($userId) {
                 $query->where('users.parent_user_id', $userId)
                     ->orWhere('users.id', $userId);
             })
-            ->groupBy('user_id', 'users.name', 'users.email')
+            ->groupBy('user_id', 'users.name', 'users.email','profile_picture')
             ->orderByDesc('productive_count')
             ->limit(5)
             ->get();
