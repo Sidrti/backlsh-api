@@ -11,6 +11,7 @@
         "laravel/framework": "^9.19",
         "laravel/sanctum": "^3.3",
         "laravel/socialite": "^5.11",
+        "laravel/telescope": "^5.0",
         "laravel/tinker": "^2.7",
         "league/csv": "^9.8",
         "sendinblue/api-v3-sdk": "8.x.x"
