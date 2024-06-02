@@ -73,6 +73,8 @@ return [
     'app_setup_link' => env('APP_SETUP_LINK'),
 
     'unit_price' => env('UNIT_PRICE'),
+
+    'openai_api_key' => env('OPENAI_API_KEY'),
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

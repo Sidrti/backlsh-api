@@ -79,7 +79,7 @@ class TeamController extends Controller
                       ->orWhere('users.id', $userId);
                 })
             ->groupBy('users.id','users.name','users.email','users.profile_picture')
-            ->selectRaw('IF(MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
+            ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
             ->get();
 
         $totalMembersCount = $teamMembers->count();

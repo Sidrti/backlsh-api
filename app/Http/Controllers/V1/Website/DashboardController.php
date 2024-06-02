@@ -4,14 +4,24 @@ namespace App\Http\Controllers\V1\Website;
 
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
+use App\Models\ProductivityTip;
 use App\Models\User;
 use App\Models\UserActivity;
+use App\Services\ChatGptService;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    protected $chatGptService;
+
+    // Use dependency injection to inject the ChatGptService
+    public function __construct(ChatGptService $chatGptService)
+    {
+        $this->chatGptService = $chatGptService;
+    }
     public function fetchAdminDashboard(Request $request)
     {
         $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
@@ -31,7 +41,7 @@ class DashboardController extends Controller
 
         $totalMembersInTeam = $this->getTotalTeamCount($userId);
 
-        $productivityTips = $this->getProductivityTips();
+       // $productivityTips = $this->getProductivityTips();
 
         $data =  [
             'total_time_worked' => $totalHoursWorked,
@@ -43,7 +53,6 @@ class DashboardController extends Controller
             'today_team_attendance' => $todayTeamAttendance,
             'top_members' => $topMembers,
             'total_members' => $totalMembersInTeam,
-            'tips' => $productivityTips
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -64,7 +73,7 @@ class DashboardController extends Controller
         $userThisMonthRank = $this->getUserRankOfmonth($userId);
         $userPeekHours = $this->getUserPeekHours($userId);
 
-        $productivityTips = $this->getProductivityTips();
+        //$productivityTips = $this->getProductivityTips();
 
         $data =  [
             'total_time_worked' => $totalHoursWorked,
@@ -75,7 +84,6 @@ class DashboardController extends Controller
             'month_user_attendance' => $monthUserAttendance,
             'month_user_rank' => $userThisMonthRank,
             'user_peek_hours' => $userPeekHours,
-            'tips' => $productivityTips
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -265,10 +273,132 @@ class DashboardController extends Controller
         }
 
         return $peakHours;
-    }
-    private function getProductivityTips()
+    }  
+    public function fetchAdminProductivityTips()
     {
-        return ["Avoid using unproductive websites and application. Also keep your mobile phone in focus mode so as to avoid distractions"];
-    }    
+        $userId = auth()->user()->id;
 
+        $productvityTip = ProductivityTip::whereDate('created_at',Carbon::today())
+        ->where('user_id',$userId)
+        ->where('admin',true)
+        ->first();
+
+        if($productvityTip) {
+            $lastRefreshed = 'Refreshed '.$productvityTip->created_at->diffForHumans();
+            return response()->json(['status_code' => 1, 'data' => ['tip' => $productvityTip->tip,'last_refreshed' => $lastRefreshed], 'message' => 'Tip fetched from db']);
+        }
+        else {
+            $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
+            ->join('processes', 'processes.id', '=', 'user_activities.process_id')
+            ->where('users.parent_user_id', $userId)
+            ->orWhere('users.id', $userId)
+            ->select(
+                'users.name as user_name',
+                'users.email as user_email',
+                'processes.process_name',
+                'user_activities.start_datetime as process_start_time',
+                'user_activities.end_datetime as process_end_time',
+                'user_activities.productivity_status'
+            )
+            ->orderBy('user_activities.created_at', 'desc') // Latest entries first
+            ->get();
+    
+            $estimatedTokens = $this->estimateTokens($userActivities->toJson());
+    
+            // Define the token limit (assume 3500 for safety margin)
+            $tokenLimit = 3000;
+        
+            // Trim data if it exceeds the token limit
+            if ($estimatedTokens > $tokenLimit) {
+                // Trimming logic: limit the number of user activities
+                $maxEntries = intval($tokenLimit / $estimatedTokens * count($userActivities));
+                $userActivities = $userActivities->take($maxEntries);
+            }
+            $prompt = "You are a data analyst at Time Tracking company like Timedoctor that collects data from employee computer on what apps and websites they are working.
+            Analyse the data and provide insights to the employer on how to improve teams productivity. Response should be neatly formatted.Use <h3></h3>,h4,h5 tags for headings. Only state the reasons for nonproductvity and tips to improve". $userActivities ;
+
+            try {
+                $response = $this->chatGptService->askChatGpt($prompt);
+                $response = str_replace("\n\n", "\n", $response);
+                $response = str_replace("\n\n\n", "\n", $response);
+                $response = nl2br($response);
+                ProductivityTip::create([
+                    'user_id' => $userId,
+                    'tip' => $response,
+                    'admin' => true,
+                ]);
+            }
+            catch(Exception $e) {
+                $response = 'Our AI systems are very busy analysing your data, kindly give us some time. We will be back with deep insight';
+            }
+        
+            return response()->json(['status_code' => 1, 'data' => ['tip' =>$response, 'last_refreshed' =>'Refreshed Seconds ago'],'message' => 'Tip fetched from chatgpt']);
+        }
+    } 
+    public function fetchUserProductivityTips()
+    {
+        $userId = auth()->user()->id;
+
+        $productvityTip = ProductivityTip::whereDate('created_at',Carbon::today())
+        ->where('user_id',$userId)
+        ->where('admin',false)
+        ->first();
+
+        if($productvityTip) {
+            $lastRefreshed = 'Refreshed '.$productvityTip->created_at->diffForHumans();
+            return response()->json(['status_code' => 1, 'data' => ['tip' => $productvityTip->tip,'last_refreshed' => $lastRefreshed], 'message' => 'Tip fetched from db']);
+        }
+        else {
+            $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
+            ->join('processes', 'processes.id', '=', 'user_activities.process_id')
+            ->where('users.id', $userId)
+            
+            ->select(
+                'users.name as user_name',
+                'users.email as user_email',
+                'processes.process_name',
+                'user_activities.start_datetime as process_start_time',
+                'user_activities.end_datetime as process_end_time',
+                'user_activities.productivity_status'
+            )
+            ->orderBy('user_activities.created_at', 'desc') // Latest entries first
+            ->get();
+    
+            $estimatedTokens = $this->estimateTokens($userActivities->toJson());
+    
+            // Define the token limit (assume 3500 for safety margin)
+            $tokenLimit = 3500;
+        
+            // Trim data if it exceeds the token limit
+            if ($estimatedTokens > $tokenLimit) {
+                // Trimming logic: limit the number of user activities
+                $maxEntries = intval($tokenLimit / $estimatedTokens * count($userActivities));
+                $userActivities = $userActivities->take($maxEntries);
+            }
+            $prompt = "You are a data analyst at Time Tracking company like Timedoctor that collects data from employee computer on what apps and websites they are working.
+            Analyse the data and provide insights to the employer on how to improve teams productivity. Response should be neatly formatted.Use <h3></h3>,h4,h5 tags for headings. Only state the reasons for nonproductvity and tips to improve". $userActivities ;
+           
+            try {
+                $response = $this->chatGptService->askChatGpt($prompt);
+               // $response = str_replace("\n\n", "\n", $response);
+                $response = str_replace("\n\n\n", "\n\n", $response);
+                $response = nl2br($response);
+                ProductivityTip::create([
+                    'user_id' => $userId,
+                    'tip' => $response,
+                    'admin' => false,
+                ]);
+            }
+            catch(Exception $e) {
+                $response = 'Our AI systems are very busy analysing your data, kindly give us some time. We will be back with deep insight';
+            }
+            return response()->json(['status_code' => 1, 'data' => ['tip' =>$response,'last_refreshed' =>'Refreshed Seconds ago'],'message' => 'Tip fetched from chatgpt']);
+        }
+    } 
+    private function estimateTokens($text) {
+        // Roughly estimate tokens based on word count and average token usage per word.
+        $wordCount = str_word_count($text);
+        $averageTokensPerWord = 1.3; // Adjust as needed
+        return $wordCount * $averageTokensPerWord;
+    }
 }
