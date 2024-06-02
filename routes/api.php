@@ -51,7 +51,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/auth/send-verification-link', [AuthController::class, 'sendVerificationLink']);
 
             Route::get('/admin-dashboard', [DashboardController::class, 'fetchAdminDashboard']);
+            Route::get('/admin-dashboard-productivity-tips', [DashboardController::class, 'fetchAdminProductivityTips']);
+
             Route::get('/user-dashboard', [DashboardController::class, 'fetchUserDashboard']);
+            Route::get('/user-dashboard-productivity-tips', [DashboardController::class, 'fetchUserProductivityTips']);
 
             Route::get('/report', [ReportController::class, 'fetchUserReportsByDate']);
             Route::get('/report/sub-activity', [ReportController::class, 'fetchUserSubActivities']);
