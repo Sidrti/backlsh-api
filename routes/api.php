@@ -41,6 +41,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/user-activity/create', [UserActivityController::class, 'createUserActivity']);
 
             Route::post('/screenshot/create',[ScreenshotController::class,'createScreenshot']);
+
+            Route::get('/auth/user', [AuthController::class, 'me']);
         });
         
         Route::group(['prefix' => 'website'], function () {
