@@ -67,6 +67,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/team-member/create',[TeamController::class,'createTeamMember']);
             Route::post('/team-member/bulk-create',[TeamController::class,'createTeamMemberBulkAdd']);
             Route::get('/team-member/sample-file-url', [TeamController::class, 'fetchSampleCsvUrl']);
+            Route::post('/team-member/update-stealth-mode',[TeamController::class,'updateStealthMode']);
 
             Route::get('/attendance',[AttendanceController::class,'fetchAttendance']);
             Route::post('/attendance/create',[AttendanceController::class,'createAttendanceSchedule']);
