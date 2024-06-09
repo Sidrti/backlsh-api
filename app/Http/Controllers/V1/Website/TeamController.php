@@ -102,6 +102,27 @@ class TeamController extends Controller
         return Response::download($filePath, 'sample.csv');
     }
 
+    public function updateStealthMode(Request $request)
+    {
+        // Validate the request
+        $request->validate([
+            'stealth_mode' => 'required|boolean',
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        // Find the user
+        $user = User::findOrFail($request->input('user_id'));
+
+        if($user->parent_user_id == auth()->user()->id || $user->id == auth()->user()->id) {
+            $user->stealth_mode = $request->input('stealth_mode');
+            $user->save();
+    
+            return response()->json(['status_code'=> 1,'message' => 'Stealth mode updated successfully.'], 200);
+        }
+        return response()->json(['status_code'=> 2,'message' => 'Stealth mode not updated'], 200);
+
+    }
+
     private function inviteNewTeamMember($name, $email)
     {
         $password = rand(100000, 9999999);
