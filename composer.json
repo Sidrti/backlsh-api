@@ -14,7 +14,8 @@
         "laravel/telescope": "^5.0",
         "laravel/tinker": "^2.7",
         "league/csv": "^9.8",
-        "sendinblue/api-v3-sdk": "8.x.x"
+        "sendinblue/api-v3-sdk": "8.x.x",
+        "srmklive/paypal": "~3.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
