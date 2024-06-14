@@ -27,6 +27,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/forget-password/send-verification-link', [AuthController::class, 'forgetPasswordSendVerificationLink']);
         Route::get('/auth/forget-password/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'forgetPasswordVerifyEmail']);
         Route::get('/auth/app-link', [AuthController::class, 'fetchBacklshAppUrl']);
+        Route::post('/paypal/webhook', [PaymentController::class, 'handleWebhook']);
+
+
+        Route::get('/payment/checkout', [PaymentController::class,'createCheckout']);
     });
 
     Route::group(['prefix' => 'app'], function () {  

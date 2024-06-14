@@ -1,5 +1,7 @@
 <?php
 
+use App\Subscriptions\PayPalSubscriptions\PayPalSubscriptions;
+
 use Illuminate\Support\Facades\Route;
 
 /*
