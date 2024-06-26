@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V1\Website;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\PayPalSubscriptions;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Http\Request;
@@ -13,6 +14,12 @@ use League\Csv\Reader;
 
 class TeamController extends Controller
 {
+    protected $paypalSubscriptionService;
+
+    public function __construct(PayPalSubscriptions $paypalSubscriptionService)
+    {
+        $this->paypalSubscriptionService = $paypalSubscriptionService;
+    }
     public function createTeamMember(Request $request)
     {
         $request->validate([
@@ -23,6 +30,10 @@ class TeamController extends Controller
         $user = User::where('email', $request->input('email'))->first();
 
         if (!$user) {
+           // $parentUser = User::find(auth()->user()->id);
+          //  $subscription = $parentUser->subscriptions()->first();
+           // $teamMemberCount = User::where('parent_user_id',$parentUser->id)->count() + 1;
+         //   $this->paypalSubscriptionService->updateQuantity($subscription->stripe_id,$teamMemberCount);
             return $this->inviteNewTeamMember($request->input('name'), $request->input('email'));
         } else {
             return $this->handleExistingTeamMember($user);
@@ -138,7 +149,7 @@ class TeamController extends Controller
         $body = view('email.member_onboarding_email', $data)->render();
         $subject = auth()->user()->name .' has added you to their team';
         Helper::sendEmail($email, $subject, $body);
-
+       
         return response()->json([
             'status_code' => 1,
             'message' => 'Onboarding email has been sent to ' . $name,

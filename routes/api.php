@@ -29,8 +29,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/auth/app-link', [AuthController::class, 'fetchBacklshAppUrl']);
         Route::post('/paypal/webhook', [PaymentController::class, 'handleWebhook']);
 
-
-        Route::get('/payment/checkout', [PaymentController::class,'createCheckout']);
+        Route::get('/payment/success', [PaymentController::class,'paymentSuccess']);
+        Route::get('/payment/cancel', [PaymentController::class,'paymentCancel']);
     });
 
     Route::group(['prefix' => 'app'], function () {  

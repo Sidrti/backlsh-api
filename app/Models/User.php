@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
 use App\AttendanceSchedule;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -69,5 +70,14 @@ class User extends Authenticatable
     public function userActivities()
     {
         return $this->hasMany(UserActivity::class);
+    }
+    public function isPayPalSubscribed()
+    {
+        $today = Carbon::today();
+        $subscription = $this->subscriptions()
+            ->where('stripe_status', 'ACTIVE')
+            ->where('ends_at', '>', $today)
+            ->first();
+        return $subscription !== null;
     }
 }
