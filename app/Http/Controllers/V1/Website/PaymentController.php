@@ -39,8 +39,8 @@ class PaymentController extends Controller
       
         $paypalUrl = $this->paypalSubscriptionService->createCheckout($user,$teamMembersCount);   
         //  $paypalUrl = $this->paypalSubscription($teamMembersCount, $user);
-        return $paypalUrl;
-       // return redirect()->away($paypalUrl);
+        //return $paypalUrl;
+        return redirect()->away($paypalUrl);
 
         // $stripe =  $request->user()
         // ->newSubscription('default', 'price_1OgjuEH8GTBeCWthkvUf6ox8')
