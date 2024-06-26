@@ -7,10 +7,13 @@ use App\Models\Process;
 use App\Models\User;
 use App\Models\UserActivity;
 use App\Models\UserProcessRating;
+use App\Services\PayPalSubscriptions;
 use Carbon\Carbon;
 use Exception;
 use File;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Srmklive\PayPal\Services\PayPal as PayPalClient;
 use Stripe\Price;
 use Stripe\Stripe;
 use Stripe\Subscription;
@@ -210,15 +213,18 @@ class Helper
         Stripe::setApiKey(config('app.stripe_key'));
         $user = User::find($userId);
         $teamMemberCount = User::where('parent_user_id',$user->id)->count() + 1;
-        if($user->subscribed()) {
+        if($user->isPayPalSubscribed()) {
             $subscription = $user->subscriptions()->first();
-            $price = Price::retrieve($subscription->stripe_price);
-            $subs = Subscription::retrieve($subscription->stripe_id);
-            $current_period_end = Carbon::createFromTimestamp($subs->current_period_end);
-            $current_period_start = Carbon::createFromTimestamp($subs->current_period_start);
-            $priceAmount = $price->unit_amount;
-            $totalAmount = $price->unit_amount * $teamMemberCount ;
-            $currency = $price->currency;
+            $paypalSubscriptionId = $subscription->stripe_id; 
+            $subscriptionData = Helper::getPayPalSubscription($paypalSubscriptionId);
+     
+            if ($subscriptionData) {
+                $priceAmount = $subscriptionData['billing_info']['last_payment']['amount']['value'];
+                $currency = $subscriptionData['billing_info']['last_payment']['amount']['currency_code'];
+                $current_period_end = Carbon::parse($subscriptionData['billing_info']['next_billing_time']);
+                $current_period_start = Carbon::parse($subscriptionData['create_time']);
+                $totalAmount = $priceAmount * $teamMemberCount;
+            }
         }
         else {
             $priceAmount = config('app.unit_price');
@@ -238,7 +244,7 @@ class Helper
         }
         return [
             'trial' => $user->onTrial(),
-            'subscribed' => $user->subscribed(),
+            'subscribed' => $user->isPayPalSubscribed(),
             'price' => $priceAmount,
             'total_price' => $totalAmount,
             'currency' => $currency,
@@ -248,4 +254,66 @@ class Helper
             'remaining_trial_days' => $remainingTrialDays
         ];
     }
+    protected static function getPayPalSubscription($subscriptionId)
+    {
+        try {
+            $paypal = new PayPalClient;
+            $paypal->setApiCredentials(config('paypal'));
+            $paypal->getAccessToken();
+            $response = $paypal->showSubscriptionDetails($subscriptionId);
+ 
+            if (isset($response['id']) && $response['id'] == $subscriptionId) {
+                return $response;
+            } else {
+                return null;
+            }
+        } catch (Exception $e) {
+            Log::error('Error fetching PayPal subscription: ' . $e->getMessage());
+            return null;
+        }
+    }
+    // public static function getUserSubscription($userId)
+    // {
+    //     Stripe::setApiKey(config('app.stripe_key'));
+    //     $user = User::find($userId);
+    //     dd($user->subscribed('paypal'));
+    //     $teamMemberCount = User::where('parent_user_id',$user->id)->count() + 1;
+    //     if($user->subscribed()) {
+    //         $subscription = $user->subscriptions()->first();
+    //         $price = Price::retrieve($subscription->stripe_price);
+    //         $subs = Subscription::retrieve($subscription->stripe_id);
+    //         $current_period_end = Carbon::createFromTimestamp($subs->current_period_end);
+    //         $current_period_start = Carbon::createFromTimestamp($subs->current_period_start);
+    //         $priceAmount = $price->unit_amount;
+    //         $totalAmount = $price->unit_amount * $teamMemberCount ;
+    //         $currency = $price->currency;
+    //     }
+    //     else {
+    //         $priceAmount = config('app.unit_price');
+    //         $totalAmount = config('app.unit_price') * $teamMemberCount ;
+    //         $currency = '$';
+    //         $current_period_end = $user->created_at;
+    //         $current_period_start = $user->trial_ends_at;
+    //     }
+        
+        
+
+    //     $remainingTrialDays = 0;
+    //     if($user->onTrial()) {
+    //         $currentDate = Carbon::now();
+
+    //         $remainingTrialDays = $currentDate->diffInDays($user->trial_ends_at);
+    //     }
+    //     return [
+    //         'trial' => $user->onTrial(),
+    //         'subscribed' => $user->subscribed(),
+    //         'price' => $priceAmount,
+    //         'total_price' => $totalAmount,
+    //         'currency' => $currency,
+    //         'current_period_end' => $current_period_end,
+    //         'current_period_start' => $current_period_start,
+    //         'member_count' => $teamMemberCount,
+    //         'remaining_trial_days' => $remainingTrialDays
+    //     ];
+    // }
 }
