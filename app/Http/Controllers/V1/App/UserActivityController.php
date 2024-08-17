@@ -112,7 +112,7 @@ class UserActivityController extends Controller
                             'startDateTime' => $timestamp,
                             'endDateTime' => $timestamp,
                             'title' => $data['Title'],
-                            'productivityStatus' => Helper::computeActivityProductivityStatus($url,auth()->user()->id),
+                            'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url),auth()->user()->id),
                         ]
                     ];
                 }
@@ -142,7 +142,7 @@ class UserActivityController extends Controller
                                 'startDateTime' => $timestamp,
                                 'endDateTime' => $timestamp,
                                 'title' => $data['Title'],
-                                'productivityStatus' => Helper::computeSubActivityProductivityStatus($url),
+                                'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url),auth()->user()->id),
                             ];
                             array_push($subProcessData,$newSubProcessData);
                         }
