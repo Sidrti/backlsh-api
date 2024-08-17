@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Cashier\Billable;
 use Laravel\Sanctum\HasApiTokens;
+use TCG\Voyager\Models\Role;
 
 class User extends Authenticatable
 {
@@ -80,4 +81,5 @@ class User extends Authenticatable
             ->first();
         return $subscription !== null;
     }
+
 }

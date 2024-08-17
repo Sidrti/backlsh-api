@@ -34,7 +34,11 @@ class Helper
     public static function computeActivityProductivityStatus($process,$userId)
     {
         $userProcessRatings = UserProcessRating::join('processes','processes.id','user_process_ratings.process_id')
-        ->where('user_process_ratings.user_id',$userId)
+        ->join('users','users.id','user_process_ratings.user_id')
+        ->where(function ($query) use ($userId) {
+            $query->where('users.parent_user_id', $userId)
+                  ->orWhere('users.id', $userId);
+        })
         ->where('processes.process_name',$process)
         ->first();
 
