@@ -26,6 +26,9 @@ class UserScreenshot extends Authenticatable
 
     public function getScreenshotPathAttribute($value)
     {
+        if (filter_var($value, FILTER_VALIDATE_URL)) {
+            return $value; // It's already a full URL, so return it as is
+        }
         return $value != null ? config('app.asset_url').$value : $value;
     }
 }

@@ -13,6 +13,7 @@ use Exception;
 use File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use ImageKit\ImageKit;
 use Srmklive\PayPal\Services\PayPal as PayPalClient;
 use Stripe\Price;
 use Stripe\Stripe;
@@ -51,16 +52,28 @@ class Helper
     }
     public static function saveImageToServer($file,$dir)
     {
-        $path = public_path() . $dir;
-        if (!File::exists($path)) {
-            File::makeDirectory($path, $mode = 0777, true, true);
+        $filename = rand(10000, 100000) . '_' . time() . '_' . $file->getClientOriginalName();
+        $imageKit = new ImageKit(
+            "public_6NlQn0++/IAYjuuhDMV7KnqArUw=",
+            "private_1IoRq9tqAgHnD1y9lJ7IQWg3ZDk=",
+            "https://ik.imagekit.io/backlsh26"
+        );
+        $response = $imageKit->uploadFile([
+            "file" => fopen($file->getPathname(), "r"), // Open the file stream
+            "fileName" => $filename, // Use the generated filename
+            "folder" => "/screenshots/", // Optional: specify a folder in ImageKit
+            "useUniqueFileName" => true // Let ImageKit handle unique filenames
+        ]);
+        
+        // Check if the upload was successful
+        if ($response->error === null)  {
+            // Get the URL of the uploaded image
+            $fileUrl = $response->result->url;
+            return $fileUrl;
+    
+        } else {
+            return -1;
         }
-
-        $filename = rand(10000,100000).'_'.time().'_'.$file->getClientOriginalName();
-        $file->move($path, $filename);
-        $filePath = $dir.$filename;
-
-        return $filePath;
     }
     public static function sendEmail($to,$subject,$body)
     {
