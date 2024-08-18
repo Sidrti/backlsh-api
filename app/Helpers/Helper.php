@@ -54,9 +54,9 @@ class Helper
     {
         $filename = rand(10000, 100000) . '_' . time() . '_' . $file->getClientOriginalName();
         $imageKit = new ImageKit(
-            "public_6NlQn0++/IAYjuuhDMV7KnqArUw=",
-            "private_1IoRq9tqAgHnD1y9lJ7IQWg3ZDk=",
-            "https://ik.imagekit.io/backlsh26"
+            config('app.image_kit_public_key'),
+            config('app.image_kit_private_key'),
+            config('app.image_kit_url')
         );
         $response = $imageKit->uploadFile([
             "file" => fopen($file->getPathname(), "r"), // Open the file stream

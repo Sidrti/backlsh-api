@@ -75,6 +75,12 @@ return [
     'unit_price' => env('UNIT_PRICE'),
 
     'openai_api_key' => env('OPENAI_API_KEY'),
+
+    'image_kit_private_key' => env('IMAGE_KIT_PRIVATE_KEY'),
+
+    'image_kit_public_key' => env('IMAGE_KIT_PUBLIC_KEY'),
+
+    'image_kit_url' => env('IMAGE_KIT_URL'),
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
