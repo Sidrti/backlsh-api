@@ -114,7 +114,7 @@
         <tr>
             <td>
                 <div class="content">
-                    <h3>{{ name }}, you have been invited to improve & track your productivity in Backlsh</h3>
+                    <h3>{{ $name }}, you have been invited to improve & track your productivity in Backlsh</h3>
                     <p>Use the credentials below to log in to your account:</p>
                     <table class="credentials-table">
                         <tr>
