@@ -125,7 +125,7 @@
         <tr>
             <td>
                 <div class="content">
-                    <h2 style="text-align: center;">Thankyou {{ name }} for signing with Backlsh</h2>
+                    <h2 style="text-align: center;">Thankyou for signing with Backlsh</h2>
                     <p style="color: rgb(73, 73, 74);">We're excited to help you get started with Backlsh! To ensure your account is secure, please verify your email address. By the way, our users have seen a remarkable 60% boost in productivity—imagine what you could achieve with Backlsh!</p>
                     <div class="button-container">
                         <a href="{{ $link }}" class="button">Verify your email</a>
