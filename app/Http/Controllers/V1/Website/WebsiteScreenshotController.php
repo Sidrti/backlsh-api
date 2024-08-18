@@ -20,20 +20,39 @@ class WebsiteScreenshotController extends Controller
             'user_id' => 'required|exists:users,id',
             // 'start_time' => 'nullable|string|date_format:h:i A',
             // 'end_time' => 'nullable|string|date_format:h:i A|after_or_equal:start_time',
+            'timezone_offset_minutes' => 'required|integer'
         ]);
-        $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
-        $endDate = Carbon::parse($request->input('end_date', Carbon::now()));
-        $startTime = $request->has('start_time') ? Carbon::createFromFormat('h:i A', $request->input('start_time'))->format('H:i:s') : Carbon::now()->format('H:00:00');
-        $endTime = $request->has('end_time') ? Carbon::createFromFormat('h:i A', $request->input('end_time'))->format('H:i:s') : Carbon::now()->addHour()->format('H:00:00');
 
-        // dd($startTime);
+        $timezoneOffset = $request->input('timezone_offset_minutes'); // In minutes
+        $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)))
+            ->startOfDay(); // Adjust to the start of the day after timezone conversion
+
+        // Parse and adjust end date and time
+        $endDate = Carbon::parse($request->input('end_date', Carbon::now()))
+            ->endOfDay();
+
+        $startTime = $request->has('start_time')
+            ? Carbon::createFromFormat('h:i A', $request->input('start_time'))
+            ->addMinutes($timezoneOffset) // Adjust for client's timezone
+            ->format('H:i:s')
+            : Carbon::now()->addMinutes($timezoneOffset)->format('H:i:s'); // Adjust current time to UTC
+
+
+        // Parse and adjust end time
+        $endTime = $request->has('end_time')
+            ? Carbon::createFromFormat('h:i A', $request->input('end_time'))
+            ->addMinutes($timezoneOffset) // Adjust for client's timezone
+            ->format('H:i:s')
+            : Carbon::now()->addMinutes($timezoneOffset)->addHour()->format('H:i:s');
+
         $screenshots = UserScreenshot::where('user_screenshots.user_id', $request->input('user_id'))
-        ->select('user_screenshots.*','processes.id as process_id','processes.process_name','processes.type')
-        ->join('processes','processes.id','user_screenshots.process_id')
-        ->whereBetween('user_screenshots.created_at', [$startDate->startOfDay()->format('Y-m-d H:i:s'), $endDate->endOfDay()->format('Y-m-d H:i:s')])
-        ->WhereTime('user_screenshots.created_at', '>=', $startTime)
-        ->WhereTime('user_screenshots.created_at', '<=', $endTime)
-        ->get(); 
+            ->select('user_screenshots.*', 'processes.id as process_id', 'processes.process_name', 'processes.type')
+            ->join('processes', 'processes.id', 'user_screenshots.process_id')
+            ->whereBetween('user_screenshots.created_at', [$startDate, $endDate])
+            ->WhereTime('user_screenshots.created_at', '>=', $startTime)
+            ->WhereTime('user_screenshots.created_at', '<=', $endTime)
+            ->get();
+
 
         $data =  [
             'screenshots' => $screenshots

@@ -8,6 +8,7 @@
         "php": "^8.0.2",
         "filament/filament": "^2.17",
         "guzzlehttp/guzzle": "^7.8",
+        "imagekit/imagekit": "^4.0",
         "laravel/cashier": "^14.14",
         "laravel/framework": "^9.19",
         "laravel/sanctum": "^3.3",
