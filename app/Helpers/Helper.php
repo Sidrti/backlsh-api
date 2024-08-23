@@ -190,8 +190,12 @@ class Helper
     public static function getDomainFromUrl($url)
     {
         $parsedUrl = parse_url($url);
-        $domain = isset($parsedUrl['host']) ? $parsedUrl['host'] : $url;
+        $domain = isset($parsedUrl['host']) ? $parsedUrl['host'] : '';
 
+        if (substr($domain, 0, 4) == 'www.') {
+            $domain = substr($domain, 4);
+        }
+        
         return $domain;
     }
     public static function getMembersOnlineCount($userId)

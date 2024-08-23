@@ -46,7 +46,7 @@ class UserActivityController extends Controller
                             'process_name' => Helper::getDomainFromUrl($subProcess['url']), 
                             'type' => 'WEBSITE', 
                         ]);
-                        if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null) { 
+                        if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $subProcess['title'] != null) { 
                             UserSubActivity::create([
                                 'user_activity_id' => $userActivity->id,
                                 'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
@@ -100,7 +100,7 @@ class UserActivityController extends Controller
             $preTimestamp = $data['DateTime'];
             $dateTime = new DateTime($preTimestamp);
             $timestamp = $dateTime->format('Y-m-d H:i:s');
-            $url =  $data['Url'];
+            $url =  Helper::getDomainFromUrl($data['Url']);
             $processType = Helper::computeType($processName);
 
             if (!isset($processedData[$processName])) {
