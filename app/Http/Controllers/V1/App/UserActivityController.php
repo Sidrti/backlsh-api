@@ -43,7 +43,7 @@ class UserActivityController extends Controller
                     $websiteProcess = null;
                     if($activity['type'] == 'BROWSER') {
                         $websiteProcess = Process::firstOrCreate([
-                            'process_name' => Helper::getDomainFromUrl($subProcess['url']), 
+                            'process_name' => $subProcess['url'], 
                             'type' => 'WEBSITE', 
                         ]);
                         if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $subProcess['title'] != null) { 
