@@ -153,8 +153,11 @@ class DashboardController extends Controller
 
         foreach ($result as &$day) {
             $day['productive'] = round($day['productive'], 1);
+            $day['productive_tooltip'] = Helper::convertSecondsInReadableFormat($day['productive'] * 3600);
             $day['nonproductive'] = round($day['nonproductive'], 1);
+            $day['nonproductive_tooltip'] = Helper::convertSecondsInReadableFormat($day['nonproductive'] * 3600);
             $day['neutral'] = round($day['neutral'], 1);
+            $day['neutral_tooltip'] = Helper::convertSecondsInReadableFormat($day['neutral'] * 3600);
         }
 
         return array_values($result);
