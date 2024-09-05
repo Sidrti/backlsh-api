@@ -73,16 +73,14 @@ class UserActivityController extends Controller
     public function fetchUserTotalTimeInSeconds()
     {
         $userId = auth()->user()->id;
-        $today = Carbon::now()->format('Y-m-d');
-
-        $startDate = $today->startOfDay();
-        $endDate = $today->endOfDay();
+        
+        $startDate = Carbon::now()->startOfDay();
+        $endDate = Carbon::now()->endOfDay();
         $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate);
         $totalTimeInSeconds = $totalTimeInHours * 3600;
-      //  print_r($startDate);
         $response = [
             'status_code' => 1,
-            'data' => ['total_time' => $startDate ]
+            'data' => ['total_time' => $totalTimeInSeconds ]
         ];
 
         return response()->json($response);

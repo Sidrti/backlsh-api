@@ -79,7 +79,7 @@ class AttendanceController extends Controller
                 if ($schedule) {
                     $totalHoursWorked = Helper::calculateTotalHoursByUserId($user->id,$date,$dateEndOfDay);
                     // Determine the attendance status based on the minimum hours criteria
-                    $attendanceStatus = ($totalHoursWorked >= $schedule->min_hours) ? 'FULL_DAY' : (($totalHoursWorked > 0) ? 'HALF_DAY' : 'ABSENT');
+                    $attendanceStatus = ($totalHoursWorked >= $schedule->min_hours) ? 'PRESENT' : (($totalHoursWorked > 0) ? 'HALF_DAY' : 'ABSENT');
                     ($totalHoursWorked >= $schedule->min_hours) ? $score++ : (($totalHoursWorked > 0) ? $score = $score + 0.5 : $score);
                     $scheduleExists = true;
                 }

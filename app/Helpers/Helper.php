@@ -118,9 +118,13 @@ class Helper
 
         $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
 
-        return round($filteredActivities->sum(function ($activity) {
-            return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        }), 1);
+        // return round($filteredActivities->sum(function ($activity) {
+        //     return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
+        // }), 1);
+        $totalSeconds = $filteredActivities->sum(function ($activity) {
+            return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
+        });
+        return Helper::convertSecondsInReadableFormat($totalSeconds);
     }
     public static function calculateTotalHoursByParentId($userId,$startDate,$endDate,$status = null)
     {
@@ -140,9 +144,14 @@ class Helper
 
         $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
 
-        return round($filteredActivities->sum(function ($activity) {
-            return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        }), 1);
+        // return round($filteredActivities->sum(function ($activity) {
+        //     return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
+        // }), 1);
+
+        $totalSeconds = $filteredActivities->sum(function ($activity) {
+            return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
+        });
+        return Helper::convertSecondsInReadableFormat($totalSeconds);
     }
     public static function getUserAttendance($userId,$startDate,$endDate)
     {
@@ -293,6 +302,26 @@ class Helper
             Log::error('Error fetching PayPal subscription: ' . $e->getMessage());
             return null;
         }
+    }
+    public static function convertSecondsInReadableFormat($totalSeconds)
+    {
+        $hours = floor($totalSeconds / 3600);
+        $minutes = floor(($totalSeconds % 3600) / 60);
+
+        $formattedTime = '';
+        if ($hours > 0) {
+            $formattedTime .= "{$hours}h ";
+        }
+        if ($minutes > 0) {
+            $formattedTime .= "{$minutes}m";
+        }
+
+        // If there are no hours or minutes, display "0m"
+        if (empty($formattedTime)) {
+            $formattedTime = '0m';
+        }
+
+        return $formattedTime;
     }
     // public static function getUserSubscription($userId)
     // {

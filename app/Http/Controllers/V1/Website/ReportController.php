@@ -68,16 +68,17 @@ class ReportController extends Controller
             'processes.process_name',
             'user_activities.productivity_status',
             'processes.type',
-            DB::raw('round(SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime))/3600,1) AS total_time'),
+            DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)) AS total_seconds'),
         )
         ->where('user_activities.user_id', $userId)
-        ->where('processes.process_name','!=','-1')
-        ->where('processes.process_name','!=','LockApp')
-        ->where('processes.process_name','!=','Idle')
+        ->where('processes.process_name', '!=', '-1')
+        ->where('processes.process_name', '!=', 'LockApp')
+        ->where('processes.process_name', '!=', 'Idle')
         ->whereBetween('user_activities.start_datetime', [$startDate, $endDate])
         ->whereBetween('user_activities.end_datetime', [$startDate, $endDate])
-        ->groupBy('user_activities.process_id', 'processes.process_name','user_activities.productivity_status','processes.type')
-        ->orderByDesc('total_time')
+        ->havingRaw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)) >= 60')
+        ->groupBy('user_activities.process_id', 'processes.process_name', 'user_activities.productivity_status', 'processes.type')
+        ->orderByDesc('total_seconds')
         ->get();
 
         foreach($processData as $item) {
@@ -87,6 +88,7 @@ class ReportController extends Controller
             ->where('user_id',$userId)
             ->get();
 
+            $item->total_time = Helper::convertSecondsInReadableFormat($item->total_seconds);
             $item->screenshots = $screenshots;
         }
 
@@ -95,36 +97,65 @@ class ReportController extends Controller
 
     private function getSubActivityDataWithScreenshots($userId,$processId,$startDate, $endDate)
     {
+        // $processData = UserSubActivity::join('user_activities', 'user_activities.id', '=', 'user_sub_activities.user_activity_id')
+        // ->leftJoin('processes','processes.id','user_sub_activities.process_id')
+        // ->select(
+        //     'user_activities.process_id',
+        //     'user_sub_activities.productivity_status',
+        //     'user_sub_activities.website_url',
+        //     'user_sub_activities.start_datetime',
+        //     'user_sub_activities.end_datetime',
+        //     'processes.process_name',
+        //     'processes.type',
+        //     DB::raw('round(SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime))/3600,1) AS total_time'),
+        // )
+        // ->where('user_activities.user_id', $userId)
+        // ->where('user_activities.process_id', $processId)
+        // ->where('user_sub_activities.website_url','!=','')
+        // ->where('user_sub_activities.website_url','!=','-1')
+        // ->where('processes.process_name','!=','-1')
+        // ->orderBy('total_time','desc')
+        // ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
+        // ->groupBy('user_activities.process_id', 'user_sub_activities.website_url','user_sub_activities.productivity_status','user_sub_activities.end_datetime','user_sub_activities.start_datetime','processes.process_name','processes.type')
+        // ->paginate(30);
+
         $processData = UserSubActivity::join('user_activities', 'user_activities.id', '=', 'user_sub_activities.user_activity_id')
-        ->leftJoin('processes','processes.id','user_sub_activities.process_id')
-        ->select(
-            'user_activities.process_id',
-            'user_sub_activities.productivity_status',
-            'user_sub_activities.website_url',
-            'user_sub_activities.start_datetime',
-            'user_sub_activities.end_datetime',
-            'processes.process_name',
-            'processes.type',
-            DB::raw('round(SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime))/3600,1) AS total_time'),
-        )
-        ->where('user_activities.user_id', $userId)
-        ->where('user_activities.process_id', $processId)
-        ->where('user_sub_activities.website_url','!=','')
-        ->where('user_sub_activities.website_url','!=','-1')
-        ->where('processes.process_name','!=','-1')
-        ->orderBy('total_time','desc')
-        ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
-        ->groupBy('user_activities.process_id', 'user_sub_activities.website_url','user_sub_activities.productivity_status','user_sub_activities.end_datetime','user_sub_activities.start_datetime','processes.process_name','processes.type')
-        ->paginate(30);
+    ->leftJoin('processes', 'processes.id', '=', 'user_sub_activities.process_id')
+    ->select(
+        'user_activities.process_id',
+        'user_sub_activities.productivity_status',
+        'user_sub_activities.website_url',
+        'processes.process_name',
+        'processes.type',
+        DB::raw('ROUND(SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime))) AS total_seconds')
+    )
+    ->where('user_activities.user_id', $userId)
+    ->where('user_activities.process_id', $processId)
+    ->where('user_sub_activities.website_url', '!=', '')
+    ->where('user_sub_activities.website_url', '!=', '-1')
+    ->where('processes.process_name', '!=', '-1')
+    ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
+    ->whereBetween('user_sub_activities.end_datetime', [$startDate, $endDate])
+    ->havingRaw('SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)) >= 60') // Ensuring that only subactivities with total time >= 60 seconds are included
+    ->groupBy(
+        'user_activities.process_id',
+        'user_sub_activities.website_url',
+        'user_sub_activities.productivity_status',
+        'processes.process_name',
+        'processes.type'
+    )
+    ->orderByDesc('total_seconds')
+    ->paginate(30);
 
         foreach($processData as $item) {
             $processId = $item->process_id;
             $screenshots = UserScreenshot::whereBetween('created_at', [$startDate, $endDate])
             ->where('process_id',$processId)
             ->where('user_id',$userId)
-            // ->where('website_url',$item->website_url)
+            ->limit(5)
             ->get();
-
+            
+            $item->total_time = Helper::convertSecondsInReadableFormat($item->total_seconds);
             $item->screenshots = $screenshots;
         }
 
@@ -144,7 +175,12 @@ class ReportController extends Controller
             }
         })
         ->where('processes.process_name','!=','-1')
+        ->where('processes.process_name','!=','LockApp')
+        ->where('processes.process_name','!=','Idle')
+        // ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
         ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)") 
         ->get();
 
         $result = [];
@@ -189,9 +225,13 @@ class ReportController extends Controller
 
         foreach ($result as &$day) {
             $day['productive'] = round($day['productive'], 1);
+            $day['productive_tooltip'] = Helper::convertSecondsInReadableFormat($day['productive'] * 3600);
             $day['nonproductive'] = round($day['nonproductive'], 1);
+            $day['nonproductive_tooltip'] = Helper::convertSecondsInReadableFormat($day['nonproductive'] * 3600);
             $day['neutral'] = round($day['neutral'], 1);
+            $day['neutral_tooltip'] = Helper::convertSecondsInReadableFormat($day['neutral'] * 3600);
         }
+        
 
         return array_values($result);
     }
