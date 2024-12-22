@@ -59,7 +59,7 @@ class AuthController extends Controller
             ];
             $body = view('email.verification_email', $data)->render();
             $subject = 'Verify your email';
-            Helper::sendEmail($user->email,$subject,$body);
+            Helper::sendEmail($user->email,$subject,$body,$user->name);
 
             $response = [
                 'status_code' => 1,
@@ -93,7 +93,7 @@ class AuthController extends Controller
         ];
         $body = view('email.verification_email', $data)->render();
         $subject = 'Verify your email';
-        Helper::sendEmail($user->email,$subject,$body);
+        Helper::sendEmail($user->email,$subject,$body,$user->name);
         $response = [
             'status_code' => 1,
             'message' => 'Verication link sent',
@@ -117,7 +117,7 @@ class AuthController extends Controller
             ];
             $body = view('email.verification_email', $data)->render();
             $subject = 'Verify your email';
-            Helper::sendEmail($user->email,$subject,$body);
+            Helper::sendEmail($user->email,$subject,$body,$user->name);
             $response = [
                 'status_code' => 1,
                 'message' => 'Verication link sent. Please check your email',

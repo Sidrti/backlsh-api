@@ -148,7 +148,7 @@ class TeamController extends Controller
 
         $body = view('email.member_onboarding_email', $data)->render();
         $subject = auth()->user()->name .' has added you to their team';
-        Helper::sendEmail($email, $subject, $body);
+        Helper::sendEmail($email, $subject, $body, $name);
        
         return response()->json([
             'status_code' => 1,

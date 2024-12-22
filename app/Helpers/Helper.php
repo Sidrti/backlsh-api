@@ -23,7 +23,7 @@ class Helper
 {
     public static function computeType($process)
     {
-        if($process == 'firefox' || $process == 'chrome')
+        if($process == 'firefox' || $process == 'chrome' || $process == 'edge' || $process == 'safari')
         {
             return 'BROWSER';
         }
@@ -75,7 +75,7 @@ class Helper
             return -1;
         }
     }
-    public static function sendEmail($to,$subject,$body)
+    public static function sendEmail($to,$subject,$body,$name="Max")
     {
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
@@ -86,12 +86,10 @@ class Helper
 
        $sendSmtpEmail = new \SendinBlue\Client\Model\SendSmtpEmail([
            'subject' => $subject,
-           'sender' => ['name' => 'Backlsh', 'email' => 'hi@backlsh.com'],
-           'replyTo' => ['name' => 'Backlsh', 'email' => 'hi@backlsh.com'],
-           'to' => [['name' => 'Max Mustermann', 'email' => $to]],
-        //    'htmlContent' => '<html><body><h1>This is a transactional email {{params.bodyMessage}}</h1></body></html>',
+           'sender' => ['name' => 'Jacquie', 'email' => 'hi@backlsh.in'],
+           'replyTo' => ['name' => 'Support', 'email' => 'support@backlsh.com'],
+           'to' => [['name' => $name, 'email' => $to]],
             'htmlContent' => $body,
-           'params' => ['bodyMessage' => 'made just for you!']
        ]);
 
        try {
@@ -102,7 +100,7 @@ class Helper
            echo $e->getMessage(),PHP_EOL;
 }
     }
-    public static function calculateTotalHoursByUserId($userId,$startDate,$endDate,$status = null)
+    public static function calculateTotalHoursByUserId($userId,$startDate,$endDate,$status = null,$convertFormatToReadableFormat = true)
     {
         $userActivities = UserActivity::where('user_id', $userId)
         ->join('processes','processes.id','user_activities.process_id')
@@ -124,7 +122,7 @@ class Helper
         $totalSeconds = $filteredActivities->sum(function ($activity) {
             return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
         });
-        return Helper::convertSecondsInReadableFormat($totalSeconds);
+        return $convertFormatToReadableFormat ? Helper::convertSecondsInReadableFormat($totalSeconds) : $totalSeconds ;
     }
     public static function calculateTotalHoursByParentId($userId,$startDate,$endDate,$status = null)
     {
