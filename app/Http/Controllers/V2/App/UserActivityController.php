@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V1\App;
+namespace App\Http\Controllers\V2\App;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\Helper;
@@ -70,22 +70,6 @@ class UserActivityController extends Controller
 
         return response()->json($response);
     }
-    public function fetchUserTotalTimeInSeconds()
-    {
-        $userId = auth()->user()->id;
-        
-        $startDate = Carbon::now()->startOfDay();
-        $endDate = Carbon::now()->endOfDay();
-        $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,null,false);
-        $totalTimeInSeconds = $totalTimeInHours * 3600;
-        $response = [
-            'status_code' => 1,
-            'data' => ['total_time' => $totalTimeInSeconds ]
-        ];
-
-        return response()->json($response);
-
-    }
     private function getActivityStartEndTime($batchData): array
     {
         $processedData = [];
@@ -94,11 +78,11 @@ class UserActivityController extends Controller
 
         foreach ($batchData as $key => $data) {
 
-            $processName = $data['ProcessName'];
-            $preTimestamp = $data['DateTime'];
+            $processName = $data['process_name'];
+            $preTimestamp = $data['datetime'];
             $dateTime = new DateTime($preTimestamp);
             $timestamp = $dateTime->format('Y-m-d H:i:s');
-            $url =  Helper::getDomainFromUrl($data['Url']);
+            $url =  Helper::getDomainFromUrl($data['url']);
             $processType = Helper::computeType($processName);
 
             if (!isset($processedData[$processName])) {
@@ -109,7 +93,7 @@ class UserActivityController extends Controller
                             'url' => $url,
                             'startDateTime' => $timestamp,
                             'endDateTime' => $timestamp,
-                            'title' => $data['Title'],
+                            'title' => $data['window_title'],
                             'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url),auth()->user()->id),
                         ]
                     ];
@@ -139,7 +123,7 @@ class UserActivityController extends Controller
                                 'url' => $url,
                                 'startDateTime' => $timestamp,
                                 'endDateTime' => $timestamp,
-                                'title' => $data['Title'],
+                                'title' => $data['window_title'],
                                 'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url),auth()->user()->id),
                             ];
                             array_push($subProcessData,$newSubProcessData);
@@ -148,7 +132,7 @@ class UserActivityController extends Controller
                 }
 
                 // If the next process is different or this is the last entry, store the details and reset
-                if (!isset($batchData[$key + 1]) || $batchData[$key + 1]['ProcessName'] !== $processName) {
+                if (!isset($batchData[$key + 1]) || $batchData[$key + 1]['process_name'] !== $processName) {
 
                     $responseData[] = [
                         'process' => $processName,

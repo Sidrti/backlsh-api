@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\V1\App\ScreenshotController;
 use App\Http\Controllers\V1\App\UserActivityController;
+use App\Http\Controllers\V2\App\UserActivityController as UserActivityControllerV2;
 use App\Http\Controllers\V1\AuthController;
 use App\Http\Controllers\V1\Website\AttendanceController;
 use App\Http\Controllers\V1\Website\DashboardController;
@@ -88,5 +89,13 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
-
+Route::prefix('v2')->group(function () { 
+    
+    Route::group(['middleware' => ['auth:sanctum']], function () {
+        Route::group(['prefix' => 'app'], function () { 
+            Route::post('/user-activity/create', [UserActivityControllerV2::class, 'createUserActivity']);
+        });
+    
+    });
+});
 ?>
