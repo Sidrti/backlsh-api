@@ -22,7 +22,7 @@ class UserActivityController extends Controller
             $processedActivityData = $this->getActivityStartEndTime($request->all());
             
             foreach ($processedActivityData as $activity) {
-                
+                $activity['process'] = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
                 $process = Process::firstOrCreate([
                     'process_name' => $activity['process'], 
                     'type' => $activity['type'], 
@@ -91,16 +91,17 @@ class UserActivityController extends Controller
         $processedData = [];
         $subProcessData = [];
         $responseData = [];
-
+      
         foreach ($batchData as $key => $data) {
 
             $processName = $data['ProcessName'];
+            $processName = strtolower(trim(pathinfo($processName, PATHINFO_FILENAME)));
             $preTimestamp = $data['DateTime'];
             $dateTime = new DateTime($preTimestamp);
             $timestamp = $dateTime->format('Y-m-d H:i:s');
             $url =  Helper::getDomainFromUrl($data['Url']);
             $processType = Helper::computeType($processName);
-
+            
             if (!isset($processedData[$processName])) {
                 $subProcessData = [];
                 if($processType === 'BROWSER') {

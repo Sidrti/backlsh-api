@@ -23,7 +23,8 @@ class Helper
 {
     public static function computeType($process)
     {
-        if($process == 'firefox' || $process == 'chrome' || $process == 'edge' || $process == 'safari')
+        
+        if($process == 'firefox' || $process == 'chrome' || $process == 'edge' || $process == 'msedge' || $process == 'safari')
         {
             return 'BROWSER';
         }
