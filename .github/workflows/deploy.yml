@@ -34,6 +34,3 @@ jobs:
           source: .
           target: domains/backlsh.com/public_html/api
 
-    - name: Run php artisan optimize on Hostinger
-      run: sshpass -p 'Rammandir@2021' ssh -o StrictHostKeyChecking=no u790439483@217.21.94.205 -p 65002 'cd domains/backlsh.com/public_html/api && php artisan optimize'
-
