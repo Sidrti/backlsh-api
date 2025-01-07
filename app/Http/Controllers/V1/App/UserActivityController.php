@@ -20,7 +20,7 @@ class UserActivityController extends Controller
         {
             $userId = auth()->user()->id;
             $processedActivityData = $this->getActivityStartEndTime($request->all());
-            
+        
             foreach ($processedActivityData as $activity) {
                 $activity['process'] = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
                 $process = Process::firstOrCreate([
@@ -39,6 +39,7 @@ class UserActivityController extends Controller
                 }
             
                 // Insert sub-processes
+                
                 foreach ($activity['subProcess'] as $subProcess) {
                     $websiteProcess = null;
                     if($activity['type'] == 'BROWSER') {
@@ -46,6 +47,7 @@ class UserActivityController extends Controller
                             'process_name' => $subProcess['url'], 
                             'type' => 'WEBSITE', 
                         ]);
+                     
                         if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $subProcess['title'] != null) { 
                             UserSubActivity::create([
                                 'user_activity_id' => $userActivity->id,
@@ -101,7 +103,7 @@ class UserActivityController extends Controller
             $timestamp = $dateTime->format('Y-m-d H:i:s');
             $url =  Helper::getDomainFromUrl($data['Url']);
             $processType = Helper::computeType($processName);
-            
+        
             if (!isset($processedData[$processName])) {
                 $subProcessData = [];
                 if($processType === 'BROWSER') {
