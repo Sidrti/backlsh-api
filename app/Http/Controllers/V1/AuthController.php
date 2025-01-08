@@ -270,7 +270,7 @@ class AuthController extends Controller
         ]);
         $file = $request->file('media');
         $dir = '/uploads/profile/';
-        $path = Helper::saveImageToServer($file,$dir);
+        $path = Helper::saveImageToServer($file,$dir,true);
         $user = User::find(auth()->user()->id);
         $user->update([
             'profile_picture' => $path,
