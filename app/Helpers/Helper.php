@@ -51,29 +51,36 @@ class Helper
     {
         return 'NONPRODUCTIVE';
     }
-    public static function saveImageToServer($file,$dir)
+    public static function saveImageToServer($file,$dir,$saveLocal)
     {
         $filename = rand(10000, 100000) . '_' . time() . '_' . $file->getClientOriginalName();
-        $imageKit = new ImageKit(
-            config('app.image_kit_public_key'),
-            config('app.image_kit_private_key'),
-            config('app.image_kit_url')
-        );
-        $response = $imageKit->uploadFile([
-            "file" => fopen($file->getPathname(), "r"), // Open the file stream
-            "fileName" => $filename, // Use the generated filename
-            "folder" => "/screenshots/", // Optional: specify a folder in ImageKit
-            "useUniqueFileName" => true // Let ImageKit handle unique filenames
-        ]);
+        if($saveLocal) {
+            $file->move(public_path($dir), $filename);
+            return $dir . $filename;
+        }
+        else {
+            $filename = rand(10000, 100000) . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $imageKit = new ImageKit(
+                config('app.image_kit_public_key'),
+                config('app.image_kit_private_key'),
+                config('app.image_kit_url')
+            );
+            $response = $imageKit->uploadFile([
+                "file" => fopen($file->getPathname(), "r"), // Open the file stream
+                "fileName" => $filename, // Use the generated filename
+                "folder" => "/screenshots/", // Optional: specify a folder in ImageKit
+                "useUniqueFileName" => true // Let ImageKit handle unique filenames
+            ]);
+            
+            // Check if the upload was successful
+            if ($response->error === null)  {
+                // Get the URL of the uploaded image
+                $fileUrl = $response->result->url;
+                return $fileUrl;
         
-        // Check if the upload was successful
-        if ($response->error === null)  {
-            // Get the URL of the uploaded image
-            $fileUrl = $response->result->url;
-            return $fileUrl;
-    
-        } else {
-            return -1;
+            } else {
+                return -1;
+            }
         }
     }
     public static function sendEmail($to,$subject,$body,$name="Max")

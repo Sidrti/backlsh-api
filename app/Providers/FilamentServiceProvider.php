@@ -14,7 +14,6 @@ class FilamentServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
     }
 
     /**

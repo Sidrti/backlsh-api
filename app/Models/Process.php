@@ -15,4 +15,11 @@ class Process extends Model
     {
         return $this->belongsTo(User::class);
     }
+    public function getIconAttribute($value)
+    {
+        if (filter_var($value, FILTER_VALIDATE_URL)) {
+            return $value; // It's already a full URL, so return it as is
+        }
+        return $value != null ? config('app.asset_url').$value : $value;
+    }
 }
