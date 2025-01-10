@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Cashier\Billable;
 use Laravel\Sanctum\HasApiTokens;
 use TCG\Voyager\Models\Role;
@@ -64,12 +65,16 @@ class User extends Authenticatable
     {
       return $this->belongsToMany(AttendanceSchedule::class);
     }
+    // public function getProfilePictureAttribute($value)
+    // {
+    //     if (filter_var($value, FILTER_VALIDATE_URL)) {
+    //         return $value; // It's already a full URL, so return it as is
+    //     }
+    //     return $value != null ? config('app.asset_url').$value : $value;
+    // }
     public function getProfilePictureAttribute($value)
     {
-        if (filter_var($value, FILTER_VALIDATE_URL)) {
-            return $value; // It's already a full URL, so return it as is
-        }
-        return $value != null ? config('app.asset_url').$value : $value;
+        return $value ? config('app.asset_url'). Storage::url($value) : null;
     }
     public function userActivities()
     {

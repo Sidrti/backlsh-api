@@ -18,7 +18,7 @@ class ScreenshotController extends Controller
             'process_name' => 'required|string'
         ]);
         $file = $request->file('screenshot_image');
-        $dir = '/uploads/screenshots/';
+        $dir = '/uploads/screenshots';
 
         $path = Helper::saveImageToServer($file,$dir);
 
