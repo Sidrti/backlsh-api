@@ -269,7 +269,7 @@ class AuthController extends Controller
             'media' => 'required|mimes:png,jpg,jpeg|max:5000',
         ]);
         $file = $request->file('media');
-        $dir = '/uploads/profile/';
+        $dir = '/uploads/profile';
         $path = Helper::saveImageToServer($file,$dir,true);
         $user = User::find(auth()->user()->id);
         $user->update([

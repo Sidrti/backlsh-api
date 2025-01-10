@@ -38,14 +38,17 @@ class ProcessResource extends Resource
                         'WEBSITE' => 'Website',
                         'BROWSER' => 'Browser',
                     ]),
-
-                    FileUpload::make('icon')
-                    ->label('Icon')
-                    ->image() // Ensures only image files are uploaded
-                    ->disk('public') // Disk to store the files (ensure public disk is configured)
-                    ->directory('uploads/processes') // Folder where images will be stored
-                    ->maxSize(1024) // Maximum file size in KB
-                    ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp', 'image/gif']),
+                    
+                FileUpload::make('icon')
+                    ->image()
+                    ->directory('uploads/picons')
+                // FileUpload::make('icon')
+                //     ->label('Icon')
+                //     ->image() // Ensures only image files are uploaded
+                //     ->disk('public') // Disk to store the files (ensure public disk is configured)
+                //     ->directory('uploads/processes') // Folder where images will be stored
+                //     ->maxSize(1024) // Maximum file size in KB
+                //     ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp', 'image/gif']),
             ]);
     }
 
@@ -61,12 +64,11 @@ class ProcessResource extends Resource
                 TextColumn::make('type')
                     ->label('Type')
                     ->sortable(),
-
+                
+                    
                 ImageColumn::make('icon')
-                    ->label('Icon')
-                    ->size(40) // Adjust size as needed
-                    ->disk('public') // Use the public disk
-                    ->url(fn ($record) => config('app.asset_url'). '/' . $record->icon)
+                    ->square()
+                    ->width(30),
             ])
             ->filters([])
             ->actions([

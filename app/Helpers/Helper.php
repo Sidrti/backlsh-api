@@ -51,12 +51,12 @@ class Helper
     {
         return 'NONPRODUCTIVE';
     }
-    public static function saveImageToServer($file,$dir,$saveLocal)
+    public static function saveImageToServer($file,$dir,$saveLocal=false)
     {
         $filename = rand(10000, 100000) . '_' . time() . '_' . $file->getClientOriginalName();
         if($saveLocal) {
-            $file->move(public_path($dir), $filename);
-            return $dir . $filename;
+            $filePath = $file->storeAs($dir, $filename, 'public'); // 'public' disk to store in 'storage/app/public'
+            return $filePath; 
         }
         else {
             $filename = rand(10000, 100000) . '_' . time() . '.' . $file->getClientOriginalExtension();
