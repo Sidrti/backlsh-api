@@ -11,6 +11,8 @@ use Carbon\Carbon;
 use DateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class UserActivityController extends Controller
 {
@@ -20,7 +22,6 @@ class UserActivityController extends Controller
         {
             $userId = auth()->user()->id;
             $processedActivityData = $this->getActivityStartEndTime($request->all());
-        
             foreach ($processedActivityData as $activity) {
                 $activity['process'] = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
                 $process = Process::firstOrCreate([
@@ -37,17 +38,25 @@ class UserActivityController extends Controller
                         'end_datetime' => $activity['endDateTime'],
                     ]);
                 }
-            
                 // Insert sub-processes
-                
+               
                 foreach ($activity['subProcess'] as $subProcess) {
                     $websiteProcess = null;
                     if($activity['type'] == 'BROWSER') {
+                        if($subProcess['url'] == '' || $subProcess['url'] == null) {
+                            continue;
+                        }
                         $websiteProcess = Process::firstOrCreate([
                             'process_name' => $subProcess['url'], 
                             'type' => 'WEBSITE', 
                         ]);
-                     
+                        if (!$websiteProcess->icon) {
+                        
+                            $faviconPath = $this->downloadFavicon($subProcess['url']);
+                            $websiteProcess->icon = $faviconPath;
+                            $websiteProcess->save();
+                        }
+                      
                         if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $subProcess['title'] != null) { 
                             UserSubActivity::create([
                                 'user_activity_id' => $userActivity->id,
@@ -179,6 +188,36 @@ class UserActivityController extends Controller
             ->get();
 
         return response()->json($result);
+    }
+    private function downloadFavicon($url)
+    {
+        $domain = $url;
+        $faviconUrl = "https://www.google.com/s2/favicons?domain={$domain}&sz=64";
+        $fallbackIconPath = config('app.web_default_image');
+        try {
+            $faviconImage = Http::get($faviconUrl)->body();
+            $defaultFaviconUrl = "https://www.google.com/s2/favicons?domain=example.com&sz=64";
+            $defaultFaviconResponse = Http::get($defaultFaviconUrl);
+            if ($faviconImage === $defaultFaviconResponse->body()) {
+                // Return fallback icon if the favicon is default
+                return $fallbackIconPath;
+            }
+
+            
+            $faviconPath = "uploads/favicons/{$domain}.png";
+
+            // $path = Helper::saveImageToServer($faviconImage,$dir);
+            // return $path;
+            Storage::disk('public')->put($faviconPath, $faviconImage);
+            return $faviconPath;
+    
+            // // Update the icon field in the database
+            // $websiteProcess->icon = $faviconPath;
+            // $websiteProcess->save();
+        } catch (\Exception $e) {
+            // Handle errors, e.g., if favicon fetching fails
+            print("Failed to fetch favicon for {$domain}: " . $e->getMessage());
+        }
     }
 }
 
