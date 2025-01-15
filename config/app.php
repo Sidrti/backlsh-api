@@ -62,6 +62,8 @@ return [
 
     'process_default_image' => env('PROCESS_DEFAULT_IMAGE'),
 
+    'web_default_image' => env('WEBSITE_DEFAULT_IMAGE'),
+
     'success_url' => env('SUCCESS_URL'),
 
     'cancel_url' => env('CANCEL_URL'),
