@@ -23,7 +23,6 @@ class ReportController extends Controller
         $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
         $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
         
-       
         $userId = $request->input('user_id');
        
         $process = $this->getProcessDataWithScreenshots($userId,$startDate,$endDate);
@@ -90,7 +89,7 @@ class ReportController extends Controller
             ->where('user_id',$userId)
             ->get();
 
-            $item->icon_url = asset('storage/' . ($item->icon ?? config(('app.process_default_image'))));
+            $item->icon_url = asset('storage/' . ($item->icon ??config(('app.process_default_image'))));
             $item->total_time = Helper::convertSecondsInReadableFormat($item->total_seconds);
             $item->screenshots = $screenshots;
         }
@@ -127,7 +126,7 @@ class ReportController extends Controller
             // ->where('user_id',$userId)
             // ->get();
 
-            $item->icon_url = asset('storage/' . ($item->icon ?? config(('app.process_default_image'))));
+            $item->icon_url = asset('storage/' . ($item->icon ?? config(('app.web_default_image'))));
             $item->total_time = Helper::convertSecondsInReadableFormat($item->total_seconds);
            // $item->screenshots = $screenshots;6
         }

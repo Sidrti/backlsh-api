@@ -20,11 +20,13 @@ class ScreenshotController extends Controller
         $file = $request->file('screenshot_image');
         $dir = '/uploads/screenshots';
 
-        $path = Helper::saveImageToServer($file,$dir);
+        $path = Helper::saveImageToServer($file,$dir,false);
 
-        $type = Helper::computeType($request->input('process_name'));
+        $processName = strtolower(trim(pathinfo($request->input('process_name'), PATHINFO_FILENAME)));
+      
+        $type = Helper::computeType($processName);
         $process = Process::firstOrCreate([
-            'process_name' => $request->input('process_name'), 
+            'process_name' => $processName, 
             'type' => $type
         ]);
 

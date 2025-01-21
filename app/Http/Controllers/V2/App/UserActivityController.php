@@ -23,6 +23,7 @@ class UserActivityController extends Controller
             
             foreach ($processedActivityData as $activity) {
                 
+                $activity['process'] = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
                 $process = Process::firstOrCreate([
                     'process_name' => $activity['process'], 
                     'type' => $activity['type'], 
