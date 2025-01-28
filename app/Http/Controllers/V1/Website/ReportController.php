@@ -18,48 +18,56 @@ class ReportController extends Controller
     {
         $request->validate([
             'user_id' => 'required|exists:users,id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date', 
         ]);
 
-        $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
-        $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
+        // $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
+        // $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
+        $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
         
         $userId = $request->input('user_id');
        
         $process = $this->getProcessDataWithScreenshots($userId,$startDate,$endDate);
         $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,'PRODUCTIVE');
         $userWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId,$startDate,$endDate,false);
-        $userAttendance = Helper::getUserAttendance($userId,$startDate,$endDate);
+        $userAttendance = Helper::getUserAttendance($userId,Carbon::parse($startDate),Carbon::parse($endDate));
+        $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate);
+        $userSubActivities = $this->getSubActivityDataWithScreenshots($userId,$startDate,$endDate);
 
         $data =  [
             'process' => $process,
             'total_productive_hours' => $totalProductiveHours,
             'user_attendance' => $userAttendance,
-            'working_trend' => $userWorkingTrend
+            'working_trend' => $userWorkingTrend,
+            'total_time_worked' => $totalHoursWorked,
+            'user_sub_activities' => $userSubActivities
         ];
 
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
-    public function fetchUserSubActivities(Request $request) 
-    {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            // 'process_id' =>'required|exists:processes,id',
-        ]);
+    // public function fetchUserSubActivities(Request $request) 
+    // {
+    //     $request->validate([
+    //         'user_id' => 'required|exists:users,id',
+    //         // 'process_id' =>'required|exists:processes,id',
+    //     ]);
 
-        $userId = $request->input('user_id');
-       // $processId = $request->input('process_id');
+    //     $userId = $request->input('user_id');
+    //    // $processId = $request->input('process_id');
 
-        $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
-        $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
+    //     $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
+    //     $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
 
-        $userSubActivitiesByProcessId = $this->getSubActivityDataWithScreenshots($userId,$startDate,$endDate);
+    //     $userSubActivitiesByProcessId = $this->getSubActivityDataWithScreenshots($userId,$startDate,$endDate);
 
-        $data =  [
-            'user_sub_activities' => $userSubActivitiesByProcessId,
-        ];
+    //     $data =  [
+    //         'user_sub_activities' => $userSubActivitiesByProcessId,
+    //     ];
 
-        return response()->json(['status_code' => 1, 'data' => $data]);
-    }
+    //     return response()->json(['status_code' => 1, 'data' => $data]);
+    // }
     private function getProcessDataWithScreenshots($userId, $startDate, $endDate)
     {
         $processData = UserActivity::join('processes', 'user_activities.process_id', '=', 'processes.id')
@@ -75,8 +83,11 @@ class ReportController extends Controller
         ->where('processes.process_name', '!=', '-1')
         ->where('processes.process_name', '!=', 'LockApp')
         ->where('processes.process_name', '!=', 'Idle')
-        ->whereBetween('user_activities.start_datetime', [$startDate, $endDate])
-        ->whereBetween('user_activities.end_datetime', [$startDate, $endDate])
+        // ->whereBetween('user_activities.start_datetime', [$startDate, $endDate])
+        // ->whereBetween('user_activities.end_datetime', [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)") 
         ->havingRaw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)) >= 60')
         ->groupBy('user_activities.process_id', 'processes.process_name', 'user_activities.productivity_status', 'processes.type','processes.icon')
         ->orderByDesc('total_seconds')
@@ -112,8 +123,9 @@ class ReportController extends Controller
         ->where('processes.process_name', '!=', '-1')
         ->where('processes.process_name', '!=', 'LockApp')
         ->where('processes.process_name', '!=', 'Idle')
-        ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
-        ->whereBetween('user_sub_activities.end_datetime', [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+        ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)") 
         ->havingRaw('SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)) >= 60')
         ->groupBy('user_sub_activities.process_id', 'processes.process_name', 'user_sub_activities.productivity_status', 'processes.type','processes.icon')
         ->orderByDesc('total_seconds')

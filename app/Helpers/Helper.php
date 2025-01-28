@@ -124,9 +124,6 @@ class Helper
 
         $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
 
-        // return round($filteredActivities->sum(function ($activity) {
-        //     return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        // }), 1);
         $totalSeconds = $filteredActivities->sum(function ($activity) {
             return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
         });
