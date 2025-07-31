@@ -20,6 +20,9 @@ class UserActivityController extends Controller
     {
         if($request->all())
         {
+            $neutralSeconds = 0;
+            $productiveSeconds = 0;
+            $nonproductiveSeconds = 0;
             $userId = auth()->user()->id;
             $processedActivityData = $this->getActivityStartEndTime($request->all());
             foreach ($processedActivityData as $activity) {
@@ -39,6 +42,34 @@ class UserActivityController extends Controller
                     ]);
                 }
                 // Insert sub-processes
+                $isSubActivityEmpty = empty($activity['subProcess']);
+                if($isSubActivityEmpty) { 
+                    $start = Carbon::parse($activity['startDateTime']);
+                    $end = Carbon::parse($activity['endDateTime']);
+                    if ($activity['process'] != '-1' && $activity['process'] != 'LockApp' && $activity['process'] != 'IdleApp') {
+                        // Calculate the duration in seconds
+                        if ($start && $end) {
+                            $durationInSeconds = $end->diffInSeconds($start);
+                        } else {
+                            $durationInSeconds = 0;
+                        }
+                    } else {
+                        $durationInSeconds = 0;
+                    }
+                    $durationInSeconds = $end->diffInSeconds($start);
+
+                    switch(strtoupper($activity['productivityStatus'])) {
+                        case 'NEUTRAL':
+                            $neutralSeconds += $durationInSeconds;
+                            break;
+                        case 'PRODUCTIVE':
+                            $productiveSeconds += $durationInSeconds;
+                            break;
+                        case 'NONPRODUCTIVE':
+                            $nonproductiveSeconds += $durationInSeconds;
+                            break;
+                    }
+                }
                
                 foreach ($activity['subProcess'] as $subProcess) {
                     $websiteProcess = null;
@@ -67,10 +98,35 @@ class UserActivityController extends Controller
                                 'start_datetime' => $subProcess['startDateTime'],
                                 'end_datetime' => $subProcess['endDateTime'],
                             ]);
+                                $start = Carbon::parse($subProcess['startDateTime']);
+                                $end = Carbon::parse($subProcess['endDateTime']);
+                                if($subProcess['url'] != '-1' && $subProcess['url'] != 'LockApp' && $subProcess['url'] != 'IdleApp') {
+                                    // Calculate the duration in seconds
+                                    if($start && $end) {
+                                        $durationInSeconds = $end->diffInSeconds($start);
+                                    } else {
+                                        $durationInSeconds = 0;
+                                    }
+                                } else {
+                                    $durationInSeconds = 0;
+                                }
+
+                                switch(strtoupper($subProcess['productivityStatus'])) {
+                                    case 'NEUTRAL':
+                                        $neutralSeconds += $durationInSeconds;
+                                        break;
+                                    case 'PRODUCTIVE':
+                                        $productiveSeconds += $durationInSeconds;
+                                        break;
+                                    case 'NONPRODUCTIVE':
+                                        $nonproductiveSeconds += $durationInSeconds;
+                                        break;
+                                }
                         }  
                     }
                 }
             }
+               $this->updateProductivitySummary($userId,now()->format('Y-m-d'), $productiveSeconds, $nonproductiveSeconds, $neutralSeconds, ($productiveSeconds+$nonproductiveSeconds+$neutralSeconds));
         }
 
         $response = [
@@ -218,6 +274,18 @@ class UserActivityController extends Controller
             // Handle errors, e.g., if favicon fetching fails
             print("Failed to fetch favicon for {$domain}: " . $e->getMessage());
         }
+    }
+       private function updateProductivitySummary($userId, $date, $productiveMins, $nonproductiveMins, $neutralMins,$totalMins) {
+        DB::table('user_productivity_summaries')
+            ->updateOrInsert(
+                ['user_id' => $userId, 'date' => $date],
+                [
+                    'productive_seconds' => DB::raw("productive_seconds + $productiveMins"),
+                    'nonproductive_seconds' => DB::raw("nonproductive_seconds + $nonproductiveMins"),
+                    'neutral_seconds' => DB::raw("neutral_seconds + $neutralMins"),
+                    'total_seconds' => DB::raw("total_seconds + $totalMins"),
+                ]
+            );
     }
 }
 

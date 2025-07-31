@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V1\Website;
 
 use App\Http\Controllers\Controller;
 use App\Models\Process;
+use App\Models\User;
 use App\Models\UserProcessRating;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,31 +51,43 @@ class UserProcessRatingController extends Controller
     }
     public function fetchProcessRating(Request $request)
     {
-        // $processRatings = Process::leftJoin('user_process_ratings','user_process_ratings.process_id','processes.id')
-        // ->leftJoin('user_activities', 'processes.id', '=', 'user_activities.process_id')
-        // ->select('processes.id','processes.process_name','processes.type','user_process_ratings.rating',  DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)/3600) AS total_time'))
-        // ->distinct('processes.process_name')
-        // ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'user_process_ratings.rating')
-        // ->orderByDesc('total_time')
-        // ->get();
+        $searchQuery = $request->get('search');
+        $currentUser = auth()->user();
+        $teamUserIds = User::where('id', $currentUser->id)
+            ->orWhere('parent_user_id', $currentUser->id)
+            ->when($currentUser->parent_user_id, function ($query) use ($currentUser) {
+                return $query->orWhere('parent_user_id', $currentUser->parent_user_id);
+            })
+            ->pluck('id');
 
-        $processRatings = Process::leftJoin('user_activities', 'processes.id', '=', 'user_activities.process_id')
-            ->leftJoin('user_process_ratings', function ($join) {
+        $query = Process::leftJoin('user_activities', function ($join) use ($teamUserIds) {
+            $join->on('processes.id', '=', 'user_activities.process_id')
+                ->whereIn('user_activities.user_id', $teamUserIds);
+        })
+            ->leftJoin('user_process_ratings', function ($join) use ($currentUser) {
                 $join->on('user_process_ratings.process_id', '=', 'processes.id')
-                    ->where('user_process_ratings.user_id', '=', auth()->user()->id); // Assuming you have access to the authenticated user's ID
+                    ->where('user_process_ratings.user_id', '=', $currentUser->id);
             })
             ->select(
                 'processes.id',
                 'processes.process_name',
                 'processes.type',
-                DB::raw('COALESCE(user_process_ratings.rating, "NEUTRAL") AS rating'), // Use COALESCE to return null if the user has not rated
+                DB::raw('COALESCE(user_process_ratings.rating, "NEUTRAL") AS rating'),
                 DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) / 3600) AS total_time')
             )
             ->distinct('processes.process_name')
             ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'user_process_ratings.rating')
-            ->orderByDesc('total_time')
-            ->where('processes.process_name','!=','-1')
-            ->get();
+            ->where('processes.process_name', '!=', '-1');
+
+            if ($searchQuery) {
+                $query->where(function ($q) use ($searchQuery) {
+                    $q->where('processes.process_name', 'like', '%' . $searchQuery . '%')
+                    ->orWhere('processes.type', 'like', '%' . $searchQuery . '%');
+                });
+            }
+
+            $query->paginate(30);
+            $processRatings = $query->orderByDesc('total_time')->paginate(30);
 
 
         return response()->json([
