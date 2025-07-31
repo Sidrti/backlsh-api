@@ -209,8 +209,8 @@ class RealtimeController extends Controller
             'processes.id as process_id',
             'user_activities.productivity_status',
             'user_activities.created_at',
-            DB::raw("CONCAT('" . config('app.media_base_url') . "', users.profile_picture) as profile_picture")
-        )
+            'users.profile_picture')
+       
             ->leftJoin('users', 'users.id', '=', 'user_activities.user_id')
             ->leftJoin('processes', 'processes.id', '=', 'user_activities.process_id')
             ->leftJoin('user_sub_activities', 'user_sub_activities.user_activity_id', '=', 'user_activities.id')

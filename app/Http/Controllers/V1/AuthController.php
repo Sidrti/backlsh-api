@@ -26,7 +26,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
         if($user) {
-            if ($user && Hash::check($request->input('password'), $user->password)) { 
+            if (Hash::check($request->input('password'), $user->password)) { 
                 $token = $user->createToken('api-token')->plainTextToken;
                 return response()->json(['status_code' => 1,'data' => ['user' => $user, 'token' => $token ],'message'=>'Login successfull.']);
             }

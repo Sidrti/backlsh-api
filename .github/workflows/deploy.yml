@@ -27,10 +27,10 @@ jobs:
       - name: Deploy to Hostinger
         uses: appleboy/scp-action@master
         with:
-          host: 217.21.94.205
-          username: u790439483
-          password: Rammandir@2021
-          port: 65002
+          host: 173.212.213.153
+          username: root
+          password: Siddhant@123
+          port: 22
           source: .
-          target: domains/backlsh.com/public_html/api
+          target: /home/backlsh.com/api.backlsh.com
 

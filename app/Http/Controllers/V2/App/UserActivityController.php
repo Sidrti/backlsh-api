@@ -161,7 +161,7 @@ class UserActivityController extends Controller
             ->get();
 
         return response()->json($result);
-    }
+    }z
 }
 
 ?>

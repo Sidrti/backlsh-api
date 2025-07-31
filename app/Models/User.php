@@ -74,8 +74,19 @@ class User extends Authenticatable
     // }
     public function getProfilePictureAttribute($value)
     {
-        return $value ? config('app.asset_url'). Storage::url($value) : null;
+        if (!$value) {
+            return null;
+        }
+
+        if (filter_var($value, FILTER_VALIDATE_URL)) {
+            // It's already a full URL (like DiceBear), return as-is
+            return $value;
+        }
+
+        // Otherwise, treat it as a relative path stored in local storage
+        return config('app.asset_url') . Storage::url($value);
     }
+
     public function userActivities()
     {
         return $this->hasMany(UserActivity::class);
