@@ -18,21 +18,22 @@ class UserActivityController extends Controller
 {
     public function createUserActivity(Request $request)
     {
-        if($request->all())
-        {
+        if ($request->all()) {
             $neutralSeconds = 0;
             $productiveSeconds = 0;
             $nonproductiveSeconds = 0;
             $userId = auth()->user()->id;
             $processedActivityData = $this->getActivityStartEndTime($request->all());
+
             foreach ($processedActivityData as $activity) {
                 $activity['process'] = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
                 $process = Process::firstOrCreate([
-                    'process_name' => $activity['process'], 
-                    'type' => $activity['type'], 
+                    'process_name' => $activity['process'],
+                    'type' => $activity['type'],
                 ]);
 
-                if($activity['endDateTime'] != '' && $activity['endDateTime'] != null) {
+                $userActivity = null;
+                if ($activity['endDateTime'] != '' && $activity['endDateTime'] != null) {
                     $userActivity = UserActivity::create([
                         'user_id' => $userId,
                         'process_id' => $process->id,
@@ -41,24 +42,26 @@ class UserActivityController extends Controller
                         'end_datetime' => $activity['endDateTime'],
                     ]);
                 }
-                // Insert sub-processes
+
+                // Check if there are sub-processes
                 $isSubActivityEmpty = empty($activity['subProcess']);
-                if($isSubActivityEmpty) { 
+
+                if ($isSubActivityEmpty) {
+                    // No sub-processes, calculate duration for main activity
                     $start = Carbon::parse($activity['startDateTime']);
                     $end = Carbon::parse($activity['endDateTime']);
-                    if ($activity['process'] != '-1' && $activity['process'] != 'LockApp' && $activity['process'] != 'IdleApp') {
-                        // Calculate the duration in seconds
+
+                    if ($activity['process'] != '-1' && $activity['process'] != 'lockapp' && $activity['process'] != 'idleapp') {
                         if ($start && $end) {
-                            $durationInSeconds = $end->diffInSeconds($start);
+                            $durationInSeconds = $start->diffInSeconds($end);
                         } else {
                             $durationInSeconds = 0;
                         }
                     } else {
                         $durationInSeconds = 0;
                     }
-                    $durationInSeconds = $end->diffInSeconds($start);
 
-                    switch(strtoupper($activity['productivityStatus'])) {
+                    switch (strtoupper($activity['productivityStatus'])) {
                         case 'NEUTRAL':
                             $neutralSeconds += $durationInSeconds;
                             break;
@@ -69,41 +72,42 @@ class UserActivityController extends Controller
                             $nonproductiveSeconds += $durationInSeconds;
                             break;
                     }
-                }
-               
-                foreach ($activity['subProcess'] as $subProcess) {
-                    $websiteProcess = null;
-                    if($activity['type'] == 'BROWSER') {
-                        if($subProcess['url'] == '' || $subProcess['url'] == null) {
-                            continue;
-                        }
-                        $websiteProcess = Process::firstOrCreate([
-                            'process_name' => $subProcess['url'], 
-                            'type' => 'WEBSITE', 
-                        ]);
-                        if (!$websiteProcess->icon) {
-                        
-                            $faviconPath = $this->downloadFavicon($subProcess['url']);
-                            $websiteProcess->icon = $faviconPath;
-                            $websiteProcess->save();
-                        }
-                      
-                        if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $subProcess['title'] != null) { 
-                            UserSubActivity::create([
-                                'user_activity_id' => $userActivity->id,
-                                'process_id' => $websiteProcess != null && isset($websiteProcess->id) ? $websiteProcess->id : null,
-                                'title' => $subProcess['title'],
-                                'website_url' => $subProcess['url'],
-                                'productivity_status' => $subProcess['productivityStatus'],
-                                'start_datetime' => $subProcess['startDateTime'],
-                                'end_datetime' => $subProcess['endDateTime'],
+                } else {
+                    // Process sub-activities (only when there are sub-processes)
+                    foreach ($activity['subProcess'] as $subProcess) {
+                        if ($activity['type'] == 'BROWSER') {
+                            if ($subProcess['url'] == '' || $subProcess['url'] == null) {
+                                continue;
+                            }
+
+                            $websiteProcess = Process::firstOrCreate([
+                                'process_name' => $subProcess['url'],
+                                'type' => 'WEBSITE',
                             ]);
+
+                            if (!$websiteProcess->icon) {
+                                $faviconPath = $this->downloadFavicon($subProcess['url']);
+                                $websiteProcess->icon = $faviconPath;
+                                $websiteProcess->save();
+                            }
+
+                            if ($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $userActivity) {
+                                UserSubActivity::create([
+                                    'user_activity_id' => $userActivity->id,
+                                    'process_id' => $websiteProcess->id,
+                                    'title' => $subProcess['title'] ?? '',
+                                    'website_url' => $subProcess['url'],
+                                    'productivity_status' => $subProcess['productivityStatus'],
+                                    'start_datetime' => $subProcess['startDateTime'],
+                                    'end_datetime' => $subProcess['endDateTime'],
+                                ]);
+
                                 $start = Carbon::parse($subProcess['startDateTime']);
                                 $end = Carbon::parse($subProcess['endDateTime']);
-                                if($subProcess['url'] != '-1' && $subProcess['url'] != 'LockApp' && $subProcess['url'] != 'IdleApp') {
-                                    // Calculate the duration in seconds
-                                    if($start && $end) {
-                                        $durationInSeconds = $end->diffInSeconds($start);
+
+                                if ($subProcess['url'] != '-1' && $subProcess['url'] != 'lockapp' && $subProcess['url'] != 'idleapp') {
+                                    if ($start && $end) {
+                                        $durationInSeconds = $start->diffInSeconds($end);
                                     } else {
                                         $durationInSeconds = 0;
                                     }
@@ -111,7 +115,7 @@ class UserActivityController extends Controller
                                     $durationInSeconds = 0;
                                 }
 
-                                switch(strtoupper($subProcess['productivityStatus'])) {
+                                switch (strtoupper($subProcess['productivityStatus'])) {
                                     case 'NEUTRAL':
                                         $neutralSeconds += $durationInSeconds;
                                         break;
@@ -122,17 +126,26 @@ class UserActivityController extends Controller
                                         $nonproductiveSeconds += $durationInSeconds;
                                         break;
                                 }
-                        }  
+                            }
+                        }
                     }
                 }
             }
-               $this->updateProductivitySummary($userId,now()->format('Y-m-d'), $productiveSeconds, $nonproductiveSeconds, $neutralSeconds, ($productiveSeconds+$nonproductiveSeconds+$neutralSeconds));
+
+            $this->updateProductivitySummary(
+                $userId,
+                now()->format('Y-m-d'),
+                $productiveSeconds,
+                $nonproductiveSeconds,
+                $neutralSeconds,
+                ($productiveSeconds + $nonproductiveSeconds + $neutralSeconds)
+            );
         }
 
         $response = [
             'status_code' => 1,
-            'data' => [],
-            'message' => 'Hurray !' 
+            'data' => ['total_time' => $productiveSeconds + $nonproductiveSeconds + $neutralSeconds],
+            'message' => 'Hurray !'
         ];
 
         return response()->json($response);
@@ -140,94 +153,96 @@ class UserActivityController extends Controller
     public function fetchUserTotalTimeInSeconds()
     {
         $userId = auth()->user()->id;
-        
+
         $startDate = Carbon::now()->startOfDay();
         $endDate = Carbon::now()->endOfDay();
-        $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId,$startDate,$endDate,null,false);
+        $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, null, false);
         $totalTimeInSeconds = $totalTimeInHours * 3600;
         $response = [
             'status_code' => 1,
-            'data' => ['total_time' => $totalTimeInSeconds ]
+            'data' => ['total_time' => $totalTimeInSeconds]
         ];
 
         return response()->json($response);
-
     }
     private function getActivityStartEndTime($batchData): array
     {
         $processedData = [];
-        $subProcessData = [];
         $responseData = [];
-      
-        foreach ($batchData as $key => $data) {
 
+        foreach ($batchData as $key => $data) {
             $processName = $data['ProcessName'];
             $processName = strtolower(trim(pathinfo($processName, PATHINFO_FILENAME)));
             $preTimestamp = $data['DateTime'];
             $dateTime = new DateTime($preTimestamp);
             $timestamp = $dateTime->format('Y-m-d H:i:s');
-            $url =  Helper::getDomainFromUrl($data['Url']);
+            $url = Helper::getDomainFromUrl($data['Url']);
             $processType = Helper::computeType($processName);
-        
+
             if (!isset($processedData[$processName])) {
+                // Initialize subprocess data for new process
                 $subProcessData = [];
-                if($processType === 'BROWSER') {
+                if ($processType === 'BROWSER' && (!empty($url) || !empty($data['Title']))) {
                     $subProcessData = [
                         [
                             'url' => $url,
                             'startDateTime' => $timestamp,
                             'endDateTime' => $timestamp,
                             'title' => $data['Title'],
-                            'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url),auth()->user()->id),
+                            'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url), auth()->user()->id),
                         ]
                     ];
                 }
+
                 $processedData[$processName] = [
                     'process' => $processName,
                     'startDateTime' => $timestamp,
                     'endDateTime' => $timestamp,
                     'type' => $processType,
-                    'productivityStatus' => Helper::computeActivityProductivityStatus($processName,auth()->user()->id),
+                    'productivityStatus' => Helper::computeActivityProductivityStatus($processName, auth()->user()->id),
                     'subProcess' => $subProcessData
                 ];
-            } 
-            else {
+            } else {
                 // Update end time for the current process
                 $processedData[$processName]['endDateTime'] = $timestamp;
 
-                $subProcessDataLen = count($subProcessData) - 1;
-                if($subProcessDataLen != -1)
-                {
-                    if($subProcessData[$subProcessDataLen ]['url'] == $url) {
-                        $subProcessData[$subProcessDataLen]['endDateTime'] = $processedData[$processName]['endDateTime'];
-                    }
-                    else {
-                        if($processType === 'BROWSER') {
+                // Work with the current subprocess data from processedData
+                $currentSubProcessData = &$processedData[$processName]['subProcess'];
+             
+                $subProcessDataLen = count($currentSubProcessData) - 1;
+
+                if ($subProcessDataLen >= 0) {
+                    // Check if URL matches the last subprocess entry
+                    if ($currentSubProcessData[$subProcessDataLen]['url'] == $url) {
+                        // Update the end time for the current subprocess
+                        $currentSubProcessData[$subProcessDataLen]['endDateTime'] = $timestamp;
+                    } else {
+                        // Different URL, create new subprocess entry
+                        if ($processType === 'BROWSER' && (!empty($url) || !empty($data['Title']))) {
                             $newSubProcessData = [
                                 'url' => $url,
                                 'startDateTime' => $timestamp,
                                 'endDateTime' => $timestamp,
                                 'title' => $data['Title'],
-                                'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url),auth()->user()->id),
+                                'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url), auth()->user()->id),
                             ];
-                            array_push($subProcessData,$newSubProcessData);
+                            $currentSubProcessData[] = $newSubProcessData;
                         }
                     }
                 }
+            }
 
-                // If the next process is different or this is the last entry, store the details and reset
-                if (!isset($batchData[$key + 1]) || $batchData[$key + 1]['ProcessName'] !== $processName) {
-
-                    $responseData[] = [
-                        'process' => $processName,
-                        'startDateTime' => $processedData[$processName]['startDateTime'],
-                        'endDateTime' => $processedData[$processName]['endDateTime'],
-                        'type' => $processedData[$processName]['type'],
-                        'productivityStatus' => $processedData[$processName]['productivityStatus'],
-                        'subProcess' => $subProcessData
-                    ];
-                    unset($processedData[$processName]);
-                }
+            // If the next process is different or this is the last entry, store the details
+            if (!isset($batchData[$key + 1]) || $batchData[$key + 1]['ProcessName'] !== $data['ProcessName']) {
+                $responseData[] = [
+                    'process' => $processName,
+                    'startDateTime' => $processedData[$processName]['startDateTime'],
+                    'endDateTime' => $processedData[$processName]['endDateTime'],
+                    'type' => $processedData[$processName]['type'],
+                    'productivityStatus' => $processedData[$processName]['productivityStatus'],
+                    'subProcess' => $processedData[$processName]['subProcess']
+                ];
+                unset($processedData[$processName]);
             }
         }
 
@@ -259,14 +274,14 @@ class UserActivityController extends Controller
                 return $fallbackIconPath;
             }
 
-            
+
             $faviconPath = "uploads/favicons/{$domain}.png";
 
             // $path = Helper::saveImageToServer($faviconImage,$dir);
             // return $path;
             Storage::disk('public')->put($faviconPath, $faviconImage);
             return $faviconPath;
-    
+
             // // Update the icon field in the database
             // $websiteProcess->icon = $faviconPath;
             // $websiteProcess->save();
@@ -275,7 +290,8 @@ class UserActivityController extends Controller
             print("Failed to fetch favicon for {$domain}: " . $e->getMessage());
         }
     }
-       private function updateProductivitySummary($userId, $date, $productiveMins, $nonproductiveMins, $neutralMins,$totalMins) {
+    private function updateProductivitySummary($userId, $date, $productiveMins, $nonproductiveMins, $neutralMins, $totalMins)
+    {
         DB::table('user_productivity_summaries')
             ->updateOrInsert(
                 ['user_id' => $userId, 'date' => $date],
@@ -288,5 +304,3 @@ class UserActivityController extends Controller
             );
     }
 }
-
-?>
