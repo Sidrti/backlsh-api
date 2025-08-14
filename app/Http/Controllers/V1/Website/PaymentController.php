@@ -18,6 +18,7 @@ use Stripe\Price;
 use Stripe\Stripe;
 use Stripe\Subscription as StripeSubscription;
 use Srmklive\PayPal\Services\PayPal as PayPalClient;
+use Illuminate\Support\Facades\Http;
 
 class PaymentController extends Controller
 {
@@ -27,38 +28,68 @@ class PaymentController extends Controller
     {
         $this->paypalSubscriptionService = $paypalSubscriptionService;
     }
+
     public function createCheckout(Request $request)
     {
         $user = auth()->user();
-        // $teamMembersCount = User::where(function ($query) use ($user) {
-        //     $query->where('users.parent_user_id', $user->id)
-        //           ->orWhere('users.id', $user->id);
-        //     })
-        // ->count();
-        $teamMembersCount = 1;
-      
-        $paypalUrl = $this->paypalSubscriptionService->createCheckout($user,$teamMembersCount);   
-        //  $paypalUrl = $this->paypalSubscription($teamMembersCount, $user);
-        //return $paypalUrl;
-        return redirect()->away($paypalUrl);
 
-        // $stripe =  $request->user()
-        // ->newSubscription('default', 'price_1OgjuEH8GTBeCWthkvUf6ox8')
-        // ->allowPromotionCodes()
-        // ->checkout([
-        //     'success_url' => config('app.success_url'),
-        //     'cancel_url' => config('app.cancel_url'),
-        // ]);
-        // $data = [
-        //     'status_code' => 1,
-        //     'data' => [
-        //         'url' => $stripe->url,
-        //     ],
+        // Count team members including the user themselves
+        $teamMembersCount = User::where(function ($query) use ($user) {
+            $query->where('users.parent_user_id', $user->id)
+                ->orWhere('users.id', $user->id);
+        })->count();
 
-        // ];
-        // return response()->json($data);
-        // return redirect()->away($stripe->url);
+        $checkoutUrl = "https://backlsh.lemonsqueezy.com/buy/80237463-7991-45e3-9bf0-580972b8778e";
+
+        // Build query string
+        $params = http_build_query([
+            'checkout[custom][user_id]' => $user->id,
+            'quantity' => $teamMembersCount
+        ]);
+
+        $finalUrl = $checkoutUrl . '?' . $params;
+        $data = [
+            'status_code' => 1,
+            'data' => [
+                'url' => $finalUrl,
+            ],
+        ];
+
+        return response()->json($data);
     }
+
+    // public function createCheckout(Request $request)
+    // {
+    //     $user = auth()->user();
+    //     // $teamMembersCount = User::where(function ($query) use ($user) {
+    //     //     $query->where('users.parent_user_id', $user->id)
+    //     //           ->orWhere('users.id', $user->id);
+    //     //     })
+    //     // ->count();
+    //     $teamMembersCount = 1;
+
+    //     $paypalUrl = $this->paypalSubscriptionService->createCheckout($user,$teamMembersCount);   
+    //     //  $paypalUrl = $this->paypalSubscription($teamMembersCount, $user);
+    //     //return $paypalUrl;
+    //     return redirect()->away($paypalUrl);
+
+    //     // $stripe =  $request->user()
+    //     // ->newSubscription('default', 'price_1OgjuEH8GTBeCWthkvUf6ox8')
+    //     // ->allowPromotionCodes()
+    //     // ->checkout([
+    //     //     'success_url' => config('app.success_url'),
+    //     //     'cancel_url' => config('app.cancel_url'),
+    //     // ]);
+    //     // $data = [
+    //     //     'status_code' => 1,
+    //     //     'data' => [
+    //     //         'url' => $stripe->url,
+    //     //     ],
+
+    //     // ];
+    //     // return response()->json($data);
+    //     // return redirect()->away($stripe->url);
+    // }
     // public function paypalSubscription($qty = 1, $user)
     // {
     //     $provider = new PayPalClient;
@@ -156,7 +187,7 @@ class PaymentController extends Controller
     //     $subscriptionResponse = $provider->createSubscription($data);
 
     //     if (isset($subscriptionResponse['id'])) {
-    
+
     //         $subscription = Subscription::create([
     //             'user_id' => $user->id,
     //             'name' => 'Premium Plan',
@@ -210,9 +241,9 @@ class PaymentController extends Controller
         $eventType = $request->input('event_type');
 
         switch ($eventType) {
-                // case 'BILLING.SUBSCRIPTION.ACTIVATED':
-                //     $this->handleSubscriptionCreated($request->all());
-                //     break;
+            // case 'BILLING.SUBSCRIPTION.ACTIVATED':
+            //     $this->handleSubscriptionCreated($request->all());
+            //     break;
 
             case 'BILLING.SUBSCRIPTION.CANCELLED':
                 $this->handleSubscriptionCancelled($request->all());
@@ -222,7 +253,7 @@ class PaymentController extends Controller
                 $this->handlePaymentCompleted($request->all());
                 break;
 
-                // Add more cases as needed
+            // Add more cases as needed
 
             default:
                 // Log::warning('Unhandled PayPal Webhook Event:', ['event_type' => $eventType]);
@@ -236,15 +267,15 @@ class PaymentController extends Controller
     {
         $id = $request->input('subscription_id');
         $date = Carbon::today()->format('Y-m-d');
-        $subscription = Subscription::where('stripe_id',$id)->first();
+        $subscription = Subscription::where('stripe_id', $id)->first();
         $qty = $subscription->quantity;
         $price = config('app.unit_price') * $qty;
-        $redirectUrl = config('app.website_url').'/payment-success?member='.$qty.'&amount='.$price.'&date='.$date.'&currency=USD&id='.$id;
+        $redirectUrl = config('app.website_url') . '/payment-success?member=' . $qty . '&amount=' . $price . '&date=' . $date . '&currency=USD&id=' . $id;
         return redirect()->away($redirectUrl);
     }
     public function paymentCancel(Request $request)
     {
-        $redirectUrl = config('app.website_url').'/billing?error=true';
+        $redirectUrl = config('app.website_url') . '/billing?error=true';
         return redirect()->away($redirectUrl);
     }
     // protected function handleSubscriptionCreated($payload)
@@ -275,7 +306,7 @@ class PaymentController extends Controller
         $subscriptionId = $payload['resource']['id'];
         $nextPaymentDate = $payload['resource']['billing_info']['next_billing_time'];
         $nextPaymentDate = Carbon::parse($nextPaymentDate)->format('Y-m-d H:i:s');
-        $subscription = Subscription::where('stripe_id', $subscriptionId)->update(['stripe_status' => 'ACTIVE','ends_at' => $nextPaymentDate]);
+        $subscription = Subscription::where('stripe_id', $subscriptionId)->update(['stripe_status' => 'ACTIVE', 'ends_at' => $nextPaymentDate]);
         dd($subscription);
         $data = [
             'status_code' => 1,

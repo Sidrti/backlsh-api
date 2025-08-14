@@ -27,25 +27,45 @@ class DashboardController extends Controller
         $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
         $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
         $userId = auth()->user()->id;
+        $teamUserIds = User::where('parent_user_id', $userId)
+            ->orWhere('id', $userId)
+            ->pluck('id');
+        // $teamUserIds = $teamUserIds->toArray();
         $topMemberRequestOnly = $request->input('top_member_req_only', false);
+        $topProcessRequestOnly = $request->input('top_process_req_only', false);
+        $todayUserAttendanceRequestOnly = $request->input('user_attendance_req_only', false);
+
         if ($topMemberRequestOnly) {
             $topMembers = $this->getTopMostProductiveMembers($userId, $request->input('top_member_days', 1));
             return response()->json(['status_code' => 1, 'data' => ['top_members' => $topMembers]]);
         }
+        if ($topProcessRequestOnly) {
+            $topProcesses = Helper::getTopProcesses($request->input('top_process_days', 7), $teamUserIds);
+            $topWebsites = Helper::getTopWebsites($request->input('top_process_days', 7), $teamUserIds);
+            return response()->json(['status_code' => 1, 'data' => ['top_processes' => ['apps' => $topProcesses, 'websites' => $topWebsites]]]);
+        }
+        if ($todayUserAttendanceRequestOnly) {
+            $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds);
+            return response()->json(['status_code' => 1, 'data' => ['todays_users_attendance_list' => $todaysUsersAttendanceList]]);
+        }
 
-        $totalHoursWorked = Helper::calculateTotalHoursByParentId($userId, $startDate, $endDate);
-        $totalProductiveHours = Helper::calculateTotalHoursByParentId($userId, $startDate, $endDate, 'PRODUCTIVE');
-        $totalNonProductiveHours = Helper::calculateTotalHoursByParentId($userId, $startDate, $endDate, 'NONPRODUCTIVE');
-        $totalNeutralHours = Helper::calculateTotalHoursByParentId($userId, $startDate, $endDate, 'NEUTRAL');
+        $totalHoursWorked = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate);
+        $totalProductiveHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'PRODUCTIVE');
+        $totalNonProductiveHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'NONPRODUCTIVE');
+        $totalNeutralHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'NEUTRAL');
 
         $teamWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, true);
 
         $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
-        $todayTeamAttendance = $this->getTeamAttendanceToday($userId);
+        $todayTeamAttendance = $this->getTeamAttendanceToday($teamUserIds);
         $topMembers = $this->getTopMostProductiveMembers($userId, 1);
 
-        $totalMembersInTeam = $this->getTotalTeamCount($userId);
-        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($userId);
+        $totalMembersInTeam = count($teamUserIds); // +1 for the admin user
+        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($userId,$teamUserIds);
+                    
+        // $topProcess = Helper::getTopProcesses(7, $teamUserIds);
+        // $topWebsites = Helper::getTopWebsites(7, $teamUserIds);
+        // $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds);
         // $productivityTips = $this->getProductivityTips();
 
         $data =  [
@@ -59,6 +79,8 @@ class DashboardController extends Controller
             'top_members' => $topMembers,
             'total_members' => $totalMembersInTeam,
             'week_productivity_percent' => $weekProductivityPercentage,
+            // 'top_processes' => ['apps'=> $topProcess,'websites'=>$topWebsites],
+            // 'todays_users_attendance_list' => $todaysUsersAttendanceList,
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -177,21 +199,55 @@ class DashboardController extends Controller
         $userAttendance = Helper::getUserAttendance($userId, $firstDayOfMonth, $lastDayOfMonth);
         return $userAttendance;
     }
-    private function getTeamAttendanceToday($userId)
+    private function getTeamAttendanceToday($teamUserIds)
     {
         $today = Carbon::today();
 
         $onlineMembersCount = UserActivity::whereDate('user_activities.start_datetime', $today)
             ->join('users', 'users.id', 'user_activities.user_id')
-            ->where(function ($query) use ($userId) {
-                $query->where('users.parent_user_id', $userId)
-                    ->orWhere('users.id', $userId);
-            })
-            // ->orWhere('users.id',$userId)
+            ->whereIn('user_activities.user_id', $teamUserIds)
             ->distinct('user_activities.user_id')
             ->count();
 
         return $onlineMembersCount;
+    }
+    private function getUsersAttendanceToday($teamUserIds)
+    {
+        $today = Carbon::yesterday()->format('Y-m-d');
+
+        $attendance = User::select(
+                'users.id',
+                'users.name',
+                'users.email',
+                'users.profile_picture',
+                DB::raw('MIN(user_activities.start_datetime) as login_time'),
+                'ups.total_seconds'
+            )
+            ->leftJoin('user_activities', function ($join) use ($today) {
+                $join->on('users.id', '=', 'user_activities.user_id')
+                    ->whereDate('user_activities.start_datetime', '=', $today);
+            })
+            ->leftJoin('user_productivity_summaries as ups', function ($join) use ($today) {
+                $join->on('users.id', '=', 'ups.user_id')
+                    ->whereDate('ups.date', '=', $today);
+            })
+            ->whereIn('users.id', $teamUserIds)
+            ->groupBy(
+                'users.id',
+                'users.name',
+                'users.email',
+                'users.profile_picture',
+                'ups.total_seconds'
+            )
+            ->orderBy('login_time', 'desc')
+            ->get()
+            ->map(function ($user) {
+                $user->total_hours_human = Helper::convertSecondsInReadableFormat($user->total_seconds ?? 0);
+                $user->attendance_status = ($user->total_seconds ?? 0) > 0 ? 'Present' : 'Absent';
+                return $user;
+            });
+
+        return $attendance;
     }
     private function getTopMostProductiveMembers($userId, $days = 1)
     {

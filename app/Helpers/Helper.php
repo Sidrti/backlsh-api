@@ -7,6 +7,8 @@ use App\Models\Process;
 use App\Models\User;
 use App\Models\UserActivity;
 use App\Models\UserProcessRating;
+use App\Models\UserProductivitySummary;
+use App\Models\UserSubActivity;
 use App\Services\PayPalSubscriptions;
 use Carbon\Carbon;
 use Exception;
@@ -53,7 +55,7 @@ class Helper
         $filename = rand(10000, 100000) . '_' . time() . '_' . $file->getClientOriginalName();
         if ($saveLocal) {
             $filePath = $file->storeAs($dir, $filename, 'public'); // 'public' disk to store in 'storage/app/public'
-            return $filePath;
+            return config('app.media_base_url').$filePath;
         } else {
             $filename = rand(10000, 100000) . '_' . time() . '.' . $file->getClientOriginalExtension();
             $imageKit = new ImageKit(
@@ -124,33 +126,53 @@ class Helper
         });
         return $convertFormatToReadableFormat ? Helper::convertSecondsInReadableFormat($totalSeconds) : $totalSeconds;
     }
-    public static function calculateTotalHoursByParentId($userId, $startDate, $endDate, $status = null)
+    public static function calculateTotalHoursByParentId($teamUserIds=[], $startDate, $endDate, $status = null, $convertFormatToReadableFormat = true)
     {
-        $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
-            ->where(function ($query) use ($userId) {
-                $query->where('users.parent_user_id', $userId)
-                    ->orWhere('users.id', $userId);
-            })
-            ->join('processes', 'processes.id', 'user_activities.process_id')
-            ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->where('processes.process_name', '!=', '-1')
-            ->where('processes.process_name', '!=', 'LockApp')
-            ->where('processes.process_name', '!=', 'Idle')
-            ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
-            ->get();
+        $status = strtoupper((string) $status);
 
-        $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
+        if ($status === 'PRODUCTIVE') {
+            $column = 'productive_seconds';
+        } elseif ($status === 'NONPRODUCTIVE') {
+            $column = 'nonproductive_seconds';
+        } elseif ($status === 'NEUTRAL') {
+            $column = 'neutral_seconds';
+        } else {
+            $column = 'total_seconds';
+        }
+        $totalSeconds = UserProductivitySummary::whereBetween('date', [$startDate, $endDate])
+            ->wherein('user_id',$teamUserIds)
+            ->sum($column);
 
-        // return round($filteredActivities->sum(function ($activity) {
-        //     return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
-        // }), 1);
-
-        $totalSeconds = $filteredActivities->sum(function ($activity) {
-            return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
-        });
-        return Helper::convertSecondsInReadableFormat($totalSeconds);
+        return $convertFormatToReadableFormat ? Helper::convertSecondsInReadableFormat($totalSeconds) : $totalSeconds;
     }
+    // public static function calculateTotalHoursByParentId($userId, $startDate, $endDate, $status = null, $convertFormatToReadableFormat = true)
+    // {
+    //     $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
+    //         ->where(function ($query) use ($userId) {
+    //             $query->where('users.parent_user_id', $userId)
+    //                 ->orWhere('users.id', $userId);
+    //         })
+    //         ->join('processes', 'processes.id', 'user_activities.process_id')
+    //         ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+    //         ->where('processes.process_name', '!=', '-1')
+    //         ->where('processes.process_name', '!=', 'LockApp')
+    //         ->where('processes.process_name', '!=', 'Idle')
+    //         ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
+    //         ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
+    //         ->get();
+
+    //     $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
+
+    //     // return round($filteredActivities->sum(function ($activity) {
+    //     //     return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
+    //     // }), 1);
+
+    //     $totalSeconds = $filteredActivities->sum(function ($activity) {
+    //         return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
+    //     });
+
+    //     return $convertFormatToReadableFormat ? Helper::convertSecondsInReadableFormat($totalSeconds) : $totalSeconds;
+    // }
     public static function getUserAttendance($userId, $startDate, $endDate)
     {
         $daysPresent = 0;
@@ -191,6 +213,75 @@ class Helper
 
         return ['days_present' => $daysPresent, 'total_days' => $totalDays];
     }
+    public static function getTopProcesses($days=7,$teamUserIds)
+    {
+        $endDate = Carbon::today()->format('Y-m-d');
+        $startDate = Carbon::today()->subDays($days - 1)->format('Y-m-d');
+                 
+        $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
+        // Main query
+        $query = UserActivity::selectRaw(
+            'processes.id,
+             processes.process_name,
+             processes.type,
+              processes.icon as icon_url,
+             SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)) as total_seconds,
+             user_activities.productivity_status'
+        )
+            ->join('processes', 'user_activities.process_id', '=', 'processes.id')
+            ->whereBetween('start_datetime', [$startDate, $endDate])
+            ->whereIn('user_activities.user_id', $teamUserIds)
+            ->where('processes.process_name', '!=', '-1')
+            ->where('processes.process_name', '!=', 'LockApp')
+            ->where('processes.process_name', '!=', 'Idle')
+            ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'processes.icon', 'productivity_status')
+            ->orderByDesc('total_seconds')
+            ->limit(5)
+            ->get()
+            ->map(function ($process) use ($totalTime) {
+                $process->icon_url = asset('storage/' . ($item->icon ??config(('app.process_default_image'))));
+                $process->time_used_human = Helper::convertSecondsInReadableFormat($process->total_seconds);
+                $process->percentage_time = $totalTime > 0 ? round(($process->total_seconds / $totalTime) * 100, 2) : 0;
+                return $process;
+            });
+
+        return $query;
+    }
+public static function getTopWebsites($days = 7,$teamUserIds)
+{
+    $endDate = Carbon::today()->format('Y-m-d');
+    $startDate = Carbon::today()->subDays($days - 1)->format('Y-m-d');
+
+    // Calculate total time for percentage calculation
+    $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
+
+    // Main query
+    $query = UserSubactivity::selectRaw(
+            'SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)) as total_seconds,
+             user_sub_activities.productivity_status,
+             processes.process_name,
+             processes.icon,
+             processes.type as process_type'
+        )
+        ->join('user_activities', 'user_sub_activities.user_activity_id', '=', 'user_activities.id')
+        ->join('processes', 'user_sub_activities.process_id', '=', 'processes.id')
+        ->whereIn('user_activities.user_id', $teamUserIds)
+        ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
+        ->whereNotIn('processes.process_name', ['-1', 'LockApp', 'Idle'])
+        ->groupBy('user_sub_activities.productivity_status', 'processes.process_name', 'processes.icon', 'processes.type')
+        ->orderByDesc('total_seconds')
+        ->limit(5)
+        ->get()
+        ->map(function ($website) use ($totalTime) {
+            $website->icon_url = asset('storage/' . ($website->icon ?? config('app.process_default_image')));
+            $website->time_used_human = Helper::convertSecondsInReadableFormat($website->total_seconds);
+            $website->percentage_time = $totalTime > 0 ? round(($website->total_seconds / $totalTime) * 100, 2) : 0;
+            return $website;
+        });
+
+    return $query;
+}
+
     public static function getDomainFromUrl($url)
     {
         if (!preg_match('/^https?:\/\//', $url)) {
@@ -311,6 +402,9 @@ class Helper
         $minutes = floor(($totalSeconds % 3600) / 60);
 
         $formattedTime = '';
+        if($totalSeconds < 60){
+            return "{$totalSeconds}s";
+        }
         if ($hours > 0) {
             $formattedTime .= "{$hours}h ";
         }
@@ -325,11 +419,8 @@ class Helper
 
         return $formattedTime;
     }
-    public static function getWeeklyProductivityReport($userId)
+    public static function getWeeklyProductivityReport($userId,$teamUserIds)
     {
-        $teamUserIds = User::where('parent_user_id', $userId)
-                        ->orWhere('id', $userId)
-                        ->pluck('id');
         // Get the start and end of the current week (Monday to Sunday)
         $startOfWeek = Carbon::now()->startOfWeek(Carbon::MONDAY);
         $endOfWeek = Carbon::now()->endOfWeek(Carbon::SUNDAY);
