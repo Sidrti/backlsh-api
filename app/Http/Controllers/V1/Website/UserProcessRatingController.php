@@ -60,7 +60,7 @@ class UserProcessRatingController extends Controller
             })
             ->pluck('id');
 
-        $query = Process::leftJoin('user_activities', function ($join) use ($teamUserIds) {
+        $query = Process::join('user_activities', function ($join) use ($teamUserIds) {
             $join->on('processes.id', '=', 'user_activities.process_id')
                 ->whereIn('user_activities.user_id', $teamUserIds);
         })
@@ -72,12 +72,14 @@ class UserProcessRatingController extends Controller
                 'processes.id',
                 'processes.process_name',
                 'processes.type',
+                 DB::raw("CONCAT('" . asset('storage') . "/', COALESCE(processes.icon, '" . config('app.process_default_image') . "')) AS icon_url"),
                 DB::raw('COALESCE(user_process_ratings.rating, "NEUTRAL") AS rating'),
                 DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) / 3600) AS total_time')
             )
             ->distinct('processes.process_name')
-            ->groupBy('processes.id', 'processes.process_name', 'processes.type', 'user_process_ratings.rating')
-            ->where('processes.process_name', '!=', '-1');
+            ->groupBy('processes.id', 'processes.process_name','processes.icon', 'processes.type', 'user_process_ratings.rating')
+            ->where('processes.process_name', '!=', '-1')
+             ->where('processes.process_name', '!=', 'idle');
 
             if ($searchQuery) {
                 $query->where(function ($q) use ($searchQuery) {

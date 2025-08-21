@@ -101,6 +101,7 @@ class Helper
             $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
             return true;
         } catch (Exception $e) {
+   
             return $e->getMessage();
             echo $e->getMessage(), PHP_EOL;
         }
@@ -215,8 +216,11 @@ class Helper
     }
     public static function getTopProcesses($days=7,$teamUserIds)
     {
-        $endDate = Carbon::today()->format('Y-m-d');
-        $startDate = Carbon::today()->subDays($days - 1)->format('Y-m-d');
+      $today = Carbon::today();
+      $startDate = $today->copy()->subDays($days - 1)->startOfDay()->format('Y-m-d H:i:s');
+      $endDate   = $today->endOfDay()->format('Y-m-d H:i:s');
+
+
                  
         $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
         // Main query
@@ -239,7 +243,7 @@ class Helper
             ->limit(5)
             ->get()
             ->map(function ($process) use ($totalTime) {
-                $process->icon_url = asset('storage/' . ($item->icon ??config(('app.process_default_image'))));
+                $process->icon_url = asset('storage/' . ($process->icon_url ??config(('app.process_default_image'))));
                 $process->time_used_human = Helper::convertSecondsInReadableFormat($process->total_seconds);
                 $process->percentage_time = $totalTime > 0 ? round(($process->total_seconds / $totalTime) * 100, 2) : 0;
                 return $process;
@@ -249,8 +253,10 @@ class Helper
     }
 public static function getTopWebsites($days = 7,$teamUserIds)
 {
-    $endDate = Carbon::today()->format('Y-m-d');
-    $startDate = Carbon::today()->subDays($days - 1)->format('Y-m-d');
+  $today = Carbon::today();
+  $startDate = $today->copy()->subDays($days - 1)->startOfDay()->format('Y-m-d H:i:s');
+  $endDate   = $today->endOfDay()->format('Y-m-d H:i:s');
+
 
     // Calculate total time for percentage calculation
     $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
@@ -419,7 +425,7 @@ public static function getTopWebsites($days = 7,$teamUserIds)
 
         return $formattedTime;
     }
-    public static function getWeeklyProductivityReport($userId,$teamUserIds)
+    public static function getWeeklyProductivityReport($teamUserIds)
     {
         // Get the start and end of the current week (Monday to Sunday)
         $startOfWeek = Carbon::now()->startOfWeek(Carbon::MONDAY);

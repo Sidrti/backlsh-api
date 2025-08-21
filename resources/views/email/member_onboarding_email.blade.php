@@ -77,7 +77,7 @@
                     </table>
                     <p>Log in or download our app:</p>
                     <a href="{{ config('app.website_url').'/login' }}" class="button">Login</a>
-                    <a href="{{ config('app.website_url').'/download' }}" class="button download">Download App</a>
+                    <a href="{{ config('app.website_url').'/download-nonauth' }}" class="button download">Download App</a>
                     <p>Need help? Contact us at <a href="mailto:support@backlsh.com">support@backlsh.com</a>.</p>
                     <p>Best regards,<br>{{ $adminName }}</p>
                 </div>

@@ -61,7 +61,7 @@ class DashboardController extends Controller
         $topMembers = $this->getTopMostProductiveMembers($userId, 1);
 
         $totalMembersInTeam = count($teamUserIds); // +1 for the admin user
-        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($userId,$teamUserIds);
+        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($teamUserIds);
                     
         // $topProcess = Helper::getTopProcesses(7, $teamUserIds);
         // $topWebsites = Helper::getTopWebsites(7, $teamUserIds);
@@ -89,6 +89,8 @@ class DashboardController extends Controller
         $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
         $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
         $userId = auth()->user()->id;
+        $teamUserIds = User::where('id', $userId)
+            ->pluck('id');
 
         $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate);
         $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, 'PRODUCTIVE');
@@ -100,7 +102,7 @@ class DashboardController extends Controller
         $monthUserAttendance = $this->getUserMonthAttendance($userId);
         $userThisMonthRank = $this->getUserRankOfmonth($userId);
         $userPeekHours = $this->getUserPeekHours($userId);
-        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($userId);
+        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($teamUserIds);
 
         //$productivityTips = $this->getProductivityTips();
 
@@ -213,7 +215,7 @@ class DashboardController extends Controller
     }
     private function getUsersAttendanceToday($teamUserIds)
     {
-        $today = Carbon::yesterday()->format('Y-m-d');
+        $today = Carbon::today()->format('Y-m-d');
 
         $attendance = User::select(
                 'users.id',

@@ -49,23 +49,37 @@ class ReportController extends Controller
 
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
-    // public function fetchUserSubActivities(Request $request) 
+    // public function fetchUserReportsByDate(Request $request)
     // {
     //     $request->validate([
     //         'user_id' => 'required|exists:users,id',
-    //         // 'process_id' =>'required|exists:processes,id',
+    //         'start_date' => 'nullable|date',
+    //         'end_date' => 'nullable|date|after_or_equal:start_date',
     //     ]);
 
+    //     // $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
+    //     // $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
+    //     $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
+    //     $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+
     //     $userId = $request->input('user_id');
-    //    // $processId = $request->input('process_id');
 
-    //     $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)));
-    //     $endDate = Carbon::parse($request->input('end_date', Carbon::now()))->endOfDay();
-
-    //     $userSubActivitiesByProcessId = $this->getSubActivityDataWithScreenshots($userId,$startDate,$endDate);
+    //     // $process = $this->getProcessDataWithScreenshots($userId, $startDate, $endDate);
+    //     // $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, 'PRODUCTIVE');
+    //     // $userWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, false);
+    //     // $userAttendance = Helper::getUserAttendance($userId, Carbon::parse($startDate), Carbon::parse($endDate));
+    //     // $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate);
+    //     // $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startDate, $endDate);
+    //     $userTimeline = $this->getUserActivitySlots($userId, $startDate, $endDate);
 
     //     $data =  [
-    //         'user_sub_activities' => $userSubActivitiesByProcessId,
+    //         // 'process' => $process,
+    //         // 'total_productive_hours' => $totalProductiveHours,
+    //         // 'user_attendance' => $userAttendance,
+    //         // 'working_trend' => $userWorkingTrend,
+    //         // 'total_time_worked' => $totalHoursWorked,
+    //         // 'user_sub_activities' => $userSubActivities,
+    //         'user_timeline' => $userTimeline,
     //     ];
 
     //     return response()->json(['status_code' => 1, 'data' => $data]);
@@ -220,131 +234,161 @@ class ReportController extends Controller
 
         return array_values($result);
     }
-    public static function getUserActivitySlots($userId, $startDate, $endDate)
-    {
-        $slots = [];
-        $slotDuration = 2 * 60 * 60; // 2 hours
+public static function getUserActivitySlots($userId, $startDate, $endDate)
+{
+    $slots = [];
+    $slotDuration = 2 * 60 * 60; // 2 hours
+    
+    // Single query to fetch all activities for the entire date range
+    $activities = UserActivity::where('user_activities.user_id', $userId)
+        ->join('processes as p', 'user_activities.process_id', '=', 'p.id')
+        ->whereBetween('user_activities.start_datetime', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+        ->whereNotIn('p.process_name', ['-1', 'LockApp', 'Idle'])
+        ->select(
+            'user_activities.id',
+            'user_activities.start_datetime',
+            'user_activities.end_datetime',
+            'user_activities.productivity_status',
+            'p.process_name',
+            'p.type',
+            'p.icon',
+            DB::raw('TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) as duration')
+        )
+        ->having('duration', '>=', 5)
+        ->orderBy('user_activities.start_datetime')
+        ->get();
 
-        // Loop through each date in range
-        $period = new \DatePeriod(
-            new \DateTime($startDate),
-            new \DateInterval('P1D'),
-            (new \DateTime($endDate))->modify('+1 day')
-        );
+    // Get all activity IDs that are browser type for sub-activities query
+    $browserActivityIds = $activities->where('type', 'BROWSER')->pluck('id')->toArray();
+    
+    // Single query to fetch all sub-activities for browser activities
+    $subActivities = [];
+    if (!empty($browserActivityIds)) {
+        $subActivitiesCollection = UserSubActivity::whereIn('user_activity_id', $browserActivityIds)
+            ->join('processes as sp', 'user_sub_activities.process_id', '=', 'sp.id')
+            ->whereNotIn('sp.process_name', ['-1', 'LockApp', 'Idle'])
+            ->select(
+                'user_sub_activities.user_activity_id',
+                'user_sub_activities.id',
+                'user_sub_activities.start_datetime',
+                'user_sub_activities.end_datetime',
+                'user_sub_activities.productivity_status',
+                'sp.process_name',
+                'sp.type',
+                'sp.icon',
+                DB::raw('TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime) as duration')
+            )
+            ->having('duration', '>=', 5)
+            ->orderBy('user_sub_activities.start_datetime')
+            ->get();
 
-        foreach ($period as $date) {
-            $daySlots = [];
+        // Group sub-activities by parent activity ID
+        $subActivities = $subActivitiesCollection->groupBy('user_activity_id');
+    }
 
-            for ($hour = 0; $hour < 24; $hour += 2) {
-                $slotStart = $date->format('Y-m-d') . ' ' . str_pad($hour, 2, '0', STR_PAD_LEFT) . ':00:00';
-                $slotEnd   = $date->format('Y-m-d') . ' ' . str_pad($hour + 2, 2, '0', STR_PAD_LEFT) . ':00:00';
+    // Create date period
+    $period = new \DatePeriod(
+        new \DateTime($startDate),
+        new \DateInterval('P1D'),
+        (new \DateTime($endDate))->modify('+1 day')
+    );
 
-                // Fetch all activities in this slot (with process type)
-                $activities = UserActivity::where('user_activities.user_id', $userId)
-                    ->join('processes as p', 'user_activities.process_id', '=', 'p.id')
-                    ->whereBetween('user_activities.start_datetime', [$slotStart, $slotEnd])
-                    ->select(
-                        'user_activities.id',
-                        'p.process_name',
-                        'p.type',
-                        'p.icon',
-                        'user_activities.productivity_status',
-                        'user_activities.start_datetime',
-                        DB::raw('TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) as duration')
-                    )
-                    ->having('duration', '>=', 5) // skip if less than 5s
-                    ->orderBy('user_activities.start_datetime')
-                    ->whereNotIn('p.process_name', ['-1', 'LockApp', 'Idle'])
-                    ->get();
+    // Process each date
+    foreach ($period as $date) {
+        $dayStart = $date->format('Y-m-d 00:00:00');
+        $dayEnd = $date->format('Y-m-d 23:59:59');
+        
+        // Filter activities for this day
+        $dayActivities = $activities->filter(function ($activity) use ($dayStart, $dayEnd) {
+            return $activity->start_datetime >= $dayStart && $activity->start_datetime <= $dayEnd;
+        });
 
-                // Replace browser-type activities with their subactivities
-                foreach ($activities as $key => $activity) {
-                    $activity->icon_url = asset('storage/' . ($activity->icon ??config(('app.process_default_image'))));
-                    $activity->time_used_human = Helper::convertSecondsInReadableFormat($activity->duration);
-                    if ($activity->type === 'BROWSER') {
-                        $subActivities = UserSubActivity::where('user_activity_id', $activity->id)
-                            ->join('processes as sp', 'user_sub_activities.process_id', '=', 'sp.id')
-                            ->select(
-                                'sp.process_name',
-                                'user_sub_activities.id',
-                                'sp.type',
-                                'sp.icon',
-                                'user_sub_activities.start_datetime',
-                                DB::raw('TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime) as duration')
-                            )
-                            ->having('duration', '>=', 5)
-                            ->whereNotIn('sp.process_name', ['-1', 'LockApp', 'Idle'])
-                            ->orderBy('user_sub_activities.start_datetime')
-                            ->get();
+        $daySlots = [];
+        
+        // Process each 2-hour slot
+        for ($hour = 0; $hour < 24; $hour += 2) {
+            $slotStart = $date->format('Y-m-d') . ' ' . str_pad($hour, 2, '0', STR_PAD_LEFT) . ':00:00';
+            $slotEnd = $date->format('Y-m-d') . ' ' . str_pad($hour + 2, 2, '0', STR_PAD_LEFT) . ':00:00';
 
-                        if ($subActivities->count() > 0) {
-                            unset($activities[$key]); // Remove the main browser entry
-                            // Merge sub-activities into the activities collection
-                            foreach ($subActivities as $subAct) {
-                                $subAct->icon_url = asset('storage/' . ($item->icon ??config(('app.process_default_image'))));
-                                $subAct->time_used_human = Helper::convertSecondsInReadableFormat($subAct->duration);
-                                $activities->push($subAct);
-                            }
-                        } else {
-                            unset($activities[$key]); // Remove if no valid subactivity
-                        }
-                    }
-                }
+            // Filter activities for this slot
+            $slotActivities = $dayActivities->filter(function ($activity) use ($slotStart, $slotEnd) {
+                return $activity->start_datetime >= $slotStart && $activity->start_datetime < $slotEnd;
+            });
 
-                // Calculate total productivity for this slot
-                $productiveSeconds = 0;
-                $nonProductiveSeconds = 0;
-                $neutralSeconds = 0;
+            $processedActivities = collect();
+            $productiveSeconds = 0;
+            $nonProductiveSeconds = 0;
+            $neutralSeconds = 0;
 
-                foreach ($activities as $activity) {
-                    $duration = $activity->duration ?? 0;
+            foreach ($slotActivities as $activity) {
+                // Add icon URL and human readable time
+                $activity->icon_url = asset('storage/' . ($activity->icon ?? config('app.process_default_image')));
+                $activity->time_used_human = Helper::convertSecondsInReadableFormat($activity->duration);
 
-                    if (isset($activity->sub_activities)) {
-                        foreach ($activity->sub_activities as $sub) {
-                            if ($sub->productivity_status === 'PRODUCTIVE') {
-                                $productiveSeconds += $sub->duration;
-                            } elseif ($sub->productivity_status === 'NONPRODUCTIVE') {
-                                $nonProductiveSeconds += $sub->duration;
+                if ($activity->type === 'BROWSER') {
+                    // Check if this browser activity has sub-activities
+                    if (isset($subActivities[$activity->id]) && $subActivities[$activity->id]->isNotEmpty()) {
+                        foreach ($subActivities[$activity->id] as $subActivity) {
+                            $subActivity->icon_url = asset('storage/' . ($subActivity->icon ?? config('app.process_default_image')));
+                            $subActivity->time_used_human = Helper::convertSecondsInReadableFormat($subActivity->duration);
+                            
+                            // Add to processed activities
+                            $processedActivities->push($subActivity);
+                            
+                            // Count productivity
+                            $duration = $subActivity->duration;
+                            if ($subActivity->productivity_status === 'PRODUCTIVE') {
+                                $productiveSeconds += $duration;
+                            } elseif ($subActivity->productivity_status === 'NONPRODUCTIVE') {
+                                $nonProductiveSeconds += $duration;
                             } else {
-                                $neutralSeconds += $sub->duration;
+                                $neutralSeconds += $duration;
                             }
                         }
-                    } else {
-                        if ($activity->productivity_status === 'PRODUCTIVE') {
-                            $productiveSeconds += $duration;
-                        } elseif ($activity->productivity_status === 'NONPRODUCTIVE') {
-                            $nonProductiveSeconds += $duration;
-                        } else {
-                            $neutralSeconds += $duration;
-                        }
                     }
-                }
-
-                $totalSeconds = $productiveSeconds + $nonProductiveSeconds + $neutralSeconds;
-
-                if ($totalSeconds > 0) {
-                    if ($productiveSeconds >= ($totalSeconds / 2)) {
-                        $slotStatus = 'PRODUCTIVE';
-                    } elseif ($nonProductiveSeconds >= ($totalSeconds / 2)) {
-                        $slotStatus = 'NONPRODUCTIVE';
-                    } else {
-                        $slotStatus = 'NEUTRAL';
-                    }
+                    // Skip main browser activity (it's replaced by sub-activities or removed if no valid sub-activities)
                 } else {
-                    $slotStatus = 'NO_DATA';
+                    // Add non-browser activity
+                    $processedActivities->push($activity);
+                    
+                    // Count productivity
+                    $duration = $activity->duration;
+                    if ($activity->productivity_status === 'PRODUCTIVE') {
+                        $productiveSeconds += $duration;
+                    } elseif ($activity->productivity_status === 'NONPRODUCTIVE') {
+                        $nonProductiveSeconds += $duration;
+                    } else {
+                        $neutralSeconds += $duration;
+                    }
                 }
-
-                $daySlots[] = [
-                    'slot_start' => $slotStart,
-                    'slot_end'   => $slotEnd,
-                    'status'     => $slotStatus,
-                    'activities' => $activities->values() // reset keys
-                ];
             }
 
-            $slots[$date->format('Y-m-d')] = $daySlots;
+            // Calculate slot status
+            $totalSeconds = $productiveSeconds + $nonProductiveSeconds + $neutralSeconds;
+            
+            if ($totalSeconds > 0) {
+                if ($productiveSeconds >= ($totalSeconds / 2)) {
+                    $slotStatus = 'PRODUCTIVE';
+                } elseif ($nonProductiveSeconds >= ($totalSeconds / 2)) {
+                    $slotStatus = 'NONPRODUCTIVE';
+                } else {
+                    $slotStatus = 'NEUTRAL';
+                }
+            } else {
+                $slotStatus = 'NO_DATA';
+            }
+
+            $daySlots[] = [
+                'slot_start' => $slotStart,
+                'slot_end'   => $slotEnd,
+                'status'     => $slotStatus,
+                'activities' => $processedActivities->values()
+            ];
         }
 
-        return $slots;
+        $slots[$date->format('Y-m-d')] = $daySlots;
     }
+
+    return $slots;
+}
 }
