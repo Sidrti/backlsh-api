@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LemonSqueezyWebhookController;
 use App\Http\Controllers\V1\App\ScreenshotController;
 use App\Http\Controllers\V1\App\UserActivityController;
 use App\Http\Controllers\V2\App\UserActivityController as UserActivityControllerV2;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () { 
     Route::group(['prefix' => 'website'], function () { 
+        Route::post('/webhooks/lemonsqueezy', [LemonSqueezyWebhookController::class, 'handle']);
         Route::post('/auth/login', [AuthController::class, 'login']);
         Route::post('/auth/register-admin', [AuthController::class, 'registerAdmin']);
         Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
