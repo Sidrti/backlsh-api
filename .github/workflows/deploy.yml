@@ -21,7 +21,7 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-dev --optimize-autoloader
 
-      - name: Clear Cache Optimize
+      - name: Clear Cache Optimize (Local)
         run: php artisan optimize
 
       - name: Deploy to Hostinger
@@ -33,7 +33,14 @@ jobs:
           port: 22
           source: .
           target: /home/backlsh.com/api.backlsh.com
+
+      - name: Run artisan optimize on Hostinger
+        uses: appleboy/ssh-action@master
+        with:
+          host: 173.212.213.153
+          username: dev
+          password: Siddhant@123
+          port: 22
           script: |
             cd /home/backlsh.com/api.backlsh.com
             php artisan optimize
-
