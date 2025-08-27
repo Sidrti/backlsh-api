@@ -98,7 +98,6 @@ class DashboardController extends Controller
         $totalNeutralHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, 'NEUTRAL');
 
         $userWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, false);
-
         $monthUserAttendance = $this->getUserMonthAttendance($userId);
         $userThisMonthRank = $this->getUserRankOfmonth($userId);
         $userPeekHours = $this->getUserPeekHours($userId);
@@ -121,8 +120,15 @@ class DashboardController extends Controller
     }
     private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
     {
-        $userActivities = UserActivity::join('users', 'users.id', '=', 'user_activities.user_id')
-            ->join('processes', 'processes.id', 'user_activities.process_id')
+        // Single query with aggregation at database level
+        $summaries = DB::table('user_productivity_summaries as ups')
+            ->join('users', 'users.id', '=', 'ups.user_id')
+            ->select([
+                'ups.date',
+                DB::raw('SUM(ups.productive_seconds) as total_productive_seconds'),
+                DB::raw('SUM(ups.nonproductive_seconds) as total_nonproductive_seconds'),
+                DB::raw('SUM(ups.neutral_seconds) as total_neutral_seconds')
+            ])
             ->where(function ($query) use ($userId, $teamRecords) {
                 if ($teamRecords) {
                     $query->where('users.parent_user_id', $userId)
@@ -131,68 +137,29 @@ class DashboardController extends Controller
                     $query->where('users.id', $userId);
                 }
             })
-            ->where('processes.process_name', '!=', '-1')
-            ->where('processes.process_name', '!=', 'LockApp')
-            ->where('processes.process_name', '!=', 'Idle')
-            ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
+            ->whereBetween('ups.date', [$startDate, $endDate])
+            ->groupBy('ups.date')
+            ->orderBy('ups.date')
             ->get();
 
-        //     return $userActivities;
-        $result = [];
-        $nonProductiveHours = 0;
-        $neutralHours = 0;
-        $productiveHours = 0;
-        foreach ($userActivities as $activity) {
-            $date = Carbon::parse($activity->start_datetime)->format('d-m-Y');
-            $endDate = Carbon::parse($activity->end_datetime);
-            $hours = Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime)) / 3600;
+        // Transform the results
+        return $summaries->map(function ($summary) {
+            $date = Carbon::parse($summary->date)->format('d-m-Y');
+            $productiveHours = round($summary->total_productive_seconds / 3600, 1);
+            $nonproductiveHours = round($summary->total_nonproductive_seconds / 3600, 1);
+            $neutralHours = round($summary->total_neutral_seconds / 3600, 1);
 
-            switch ($activity->productivity_status) {
-                case 'PRODUCTIVE':
-                    $productiveHours = $hours;
-                    break;
-                case 'NONPRODUCTIVE':
-                    $nonProductiveHours = $hours;
-                    break;
-                case 'NEUTRAL':
-                    $neutralHours = $hours;
-                    break;
-                default:
-                    break;
-            }
-
-            if (!isset($result[$date])) {
-                $result[$date] = [
-                    'date' => $date,
-                    'productive' => $productiveHours,
-                    'nonproductive' => $nonProductiveHours,
-                    'neutral' => $neutralHours,
-                ];
-            } else {
-                $result[$date]['productive'] += $productiveHours;
-                $result[$date]['nonproductive'] += $nonProductiveHours;
-                $result[$date]['neutral'] += $neutralHours;
-            }
-            $nonProductiveHours = 0;
-            $neutralHours = 0;
-            $productiveHours = 0;
-            $hours = 0;
-        }
-
-        foreach ($result as &$day) {
-            $day['productive'] = round($day['productive'], 1);
-            $day['productive_tooltip'] = Helper::convertSecondsInReadableFormat($day['productive'] * 3600);
-            $day['nonproductive'] = round($day['nonproductive'], 1);
-            $day['nonproductive_tooltip'] = Helper::convertSecondsInReadableFormat($day['nonproductive'] * 3600);
-            $day['neutral'] = round($day['neutral'], 1);
-            $day['neutral_tooltip'] = Helper::convertSecondsInReadableFormat($day['neutral'] * 3600);
-        }
-
-        return array_values($result);
+            return [
+                'date' => $date,
+                'productive' => $productiveHours,
+                'productive_tooltip' => Helper::convertSecondsInReadableFormat($summary->total_productive_seconds),
+                'nonproductive' => $nonproductiveHours,
+                'nonproductive_tooltip' => Helper::convertSecondsInReadableFormat($summary->total_nonproductive_seconds),
+                'neutral' => $neutralHours,
+                'neutral_tooltip' => Helper::convertSecondsInReadableFormat($summary->total_neutral_seconds),
+            ];
+        })->toArray();
     }
-
     private function getUserMonthAttendance($userId)
     {
         $firstDayOfMonth = Carbon::now()->startOfMonth();

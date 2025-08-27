@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\LemonSqueezyWebhookController;
+use App\Http\Controllers\V1\Website\LemonSqueezyWebhookController;
 use App\Http\Controllers\V1\App\ScreenshotController;
 use App\Http\Controllers\V1\App\UserActivityController;
 use App\Http\Controllers\V2\App\UserActivityController as UserActivityControllerV2;

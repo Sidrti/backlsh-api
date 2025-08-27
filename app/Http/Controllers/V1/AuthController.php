@@ -285,11 +285,12 @@ class AuthController extends Controller
     public function fetchUserAccountDetails() 
     {
         $user = auth()->user();
-        $userSteps = $this->getUserCompletedSteps($user);
         $subscription = Helper::getUserSubscription(auth()->user()->id);
-        $subscription['sub_title'] = $user->subscribed() ? 'Premium Member' : 'left in your trial';
-        $subscription['title'] = $user->subscribed() ? 'Subscribed' : $subscription['remaining_trial_days'].' Days';
-        $subscription['show_button'] = !$user->subscribed() ;
+      	$ifSubscribed = $subscription['subscribed'] ? true : false;
+        $userSteps = $this->getUserCompletedSteps($user, $ifSubscribed);
+        $subscription['sub_title'] = $ifSubscribed? 'Premium Member' : 'left in your trial';
+        $subscription['title'] = $ifSubscribed ? 'Subscribed' : $subscription['remaining_trial_days'].' Days';
+        $subscription['show_button'] = !$ifSubscribed;
         $subscription['button_text'] = 'UPGRADE NOW';
         $subscription['button_link'] = '/dashboard';
         $data = [
@@ -360,13 +361,12 @@ class AuthController extends Controller
         return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
     }
        
-    private function getUserCompletedSteps($user)
+    private function getUserCompletedSteps($user,$subscribed=false)
     {
         $teamMemberExists = User::where('parent_user_id',$user->id)->exists();
         $activityCount = UserActivity::where('user_id', $user->id)->count();
         $totalSteps = 5;
         $createAccount = true;
-        $subscribed = auth()->user()->subscribed();
         $completedSteps = (
             $createAccount +                             // Create Account
             ($user->is_verified ? 1 : 0) +  // Confirm Email
