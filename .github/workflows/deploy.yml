@@ -24,7 +24,7 @@ jobs:
       - name: Clear Cache Optimize
         run: php artisan optimize
 
-      - name: Deploy to Hostinger
+      - name: Deploy to Boxinall VPS
         uses: appleboy/scp-action@master
         with:
           host: 173.212.213.153
