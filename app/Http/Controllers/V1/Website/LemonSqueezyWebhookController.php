@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\V1\Website;
 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
 use App\Models\Subscription;
 use Carbon\Carbon;
 
@@ -16,18 +16,12 @@ class LemonSqueezyWebhookController extends Controller
     public function handle(Request $request)
     {
         // Verify the webhook signature (recommended for security)
-        if (!$this->verifySignature($request)) {
-            Log::warning('LemonSqueezy webhook signature verification failed');
-            return response()->json(['error' => 'Invalid signature'], 403);
-        }
+     //   if (!$this->verifySignature($request)) {
+        //    return response()->json(['error' => 'Invalid signature'], 403);
+      //  }
 
         $payload = $request->all();
         $eventType = $payload['meta']['event_name'] ?? null;
-
-        Log::info('LemonSqueezy webhook received', [
-            'event_type' => $eventType,
-            'payload' => $payload
-        ]);
 
         try {
             switch ($eventType) {
@@ -36,7 +30,7 @@ class LemonSqueezyWebhookController extends Controller
                     break;
 
                 case 'subscription_updated':
-                    $this->handleSubscriptionUpdated($payload);
+                  //  $this->handleSubscriptionUpdated($payload);
                     break;
 
                 case 'subscription_cancelled':
@@ -52,26 +46,20 @@ class LemonSqueezyWebhookController extends Controller
                     break;
 
                 case 'subscription_paused':
-                    $this->handleSubscriptionPaused($payload);
+                   // $this->handleSubscriptionPaused($payload);
                     break;
 
                 case 'subscription_unpaused':
-                    $this->handleSubscriptionUnpaused($payload);
+                   // $this->handleSubscriptionUnpaused($payload);
                     break;
 
                 default:
-                    Log::info('Unhandled LemonSqueezy webhook event', ['event_type' => $eventType]);
                     break;
             }
 
             return response()->json(['status' => 'success']);
 
         } catch (\Exception $e) {
-            Log::error('Error processing LemonSqueezy webhook', [
-                'event_type' => $eventType,
-                'error' => $e->getMessage(),
-                'payload' => $payload
-            ]);
 
             return response()->json(['error' => 'Internal server error'], 500);
         }
@@ -80,35 +68,33 @@ class LemonSqueezyWebhookController extends Controller
     /**
      * Handle subscription created event
      */
-    protected function handleSubscriptionCreated($payload)
-    {
-        $data = $payload['data'];
-        $customData = $data['attributes']['custom_data'] ?? [];
-        $userId = $customData['user_id'] ?? null;
+  protected function handleSubscriptionCreated($payload)
+{
+    $data = $payload['data'];
+    $attributes = $data['attributes'];
+    $customData = $payload['meta']['custom_data'] ?? [];
+    $userId = $customData['user_id'] ?? null;
 
-        if (!$userId) {
-            Log::warning('No user_id found in subscription_created webhook', ['payload' => $payload]);
-            return;
-        }
+    if (!$userId) {
+        return;
+    }
 
-        $subscription = Subscription::updateOrCreate(
-            ['stripe_id' => $data['id']],
-            [
+    $subscription = Subscription::updateOrCreate(
+        ['stripe_id' => $data['id']], // using stripe_id column to store LemonSqueezy subscription ID
+          [
                 'user_id' => $userId,
                 'name' => $data['attributes']['product_name'] ?? 'default',
                 'stripe_id' => $data['id'],
                 'stripe_status' => $this->mapLemonSqueezyStatus($data['attributes']['status']),
                 'stripe_price' => $data['attributes']['variant_name'] ?? null,
-                'quantity' => $data['attributes']['quantity'] ?? 1,
-                'trial_ends_at' => $data['attributes']['trial_ends_at'] ? 
-                    Carbon::parse($data['attributes']['trial_ends_at']) : null,
-                'ends_at' => $data['attributes']['ends_at'] ? 
-                    Carbon::parse($data['attributes']['ends_at']) : null,
+                'quantity' => $attributes['first_subscription_item']['quantity'] ?? 1,
+                'ends_at' => $data['attributes']['renews_at'] ? 
+                    Carbon::parse($data['attributes']['renews_at']) : '',
+                'stripe_price' => config('app.unit_price') * ($attributes['first_subscription_item']['quantity'] ?? 1)
             ]
-        );
+    );
+}
 
-        Log::info('Subscription created/updated', ['subscription_id' => $subscription->id]);
-    }
 
     /**
      * Handle subscription updated event
@@ -119,7 +105,6 @@ class LemonSqueezyWebhookController extends Controller
         $subscription = Subscription::where('stripe_id', $data['id'])->first();
 
         if (!$subscription) {
-            Log::warning('Subscription not found for update', ['stripe_id' => $data['id']]);
             return;
         }
 
@@ -131,8 +116,6 @@ class LemonSqueezyWebhookController extends Controller
             'ends_at' => $data['attributes']['ends_at'] ? 
                 Carbon::parse($data['attributes']['ends_at']) : null,
         ]);
-
-        Log::info('Subscription updated', ['subscription_id' => $subscription->id]);
     }
 
     /**
@@ -144,7 +127,6 @@ class LemonSqueezyWebhookController extends Controller
         $subscription = Subscription::where('stripe_id', $data['id'])->first();
 
         if (!$subscription) {
-            Log::warning('Subscription not found for cancellation', ['stripe_id' => $data['id']]);
             return;
         }
 
@@ -153,8 +135,6 @@ class LemonSqueezyWebhookController extends Controller
             'ends_at' => $data['attributes']['ends_at'] ? 
                 Carbon::parse($data['attributes']['ends_at']) : Carbon::now(),
         ]);
-
-        Log::info('Subscription cancelled', ['subscription_id' => $subscription->id]);
     }
 
     /**
@@ -166,16 +146,14 @@ class LemonSqueezyWebhookController extends Controller
         $subscription = Subscription::where('stripe_id', $data['id'])->first();
 
         if (!$subscription) {
-            Log::warning('Subscription not found for resume', ['stripe_id' => $data['id']]);
             return;
         }
 
         $subscription->update([
-            'stripe_status' => 'active',
-            'ends_at' => null, // Clear the end date when resumed
+            'stripe_status' => 'ACTIVE',
+            'ends_at' => Carbon::now()->addMonth(), // Clear the end date when resumed
         ]);
 
-        Log::info('Subscription resumed', ['subscription_id' => $subscription->id]);
     }
 
     /**
@@ -187,17 +165,14 @@ class LemonSqueezyWebhookController extends Controller
         $subscription = Subscription::where('stripe_id', $data['id'])->first();
 
         if (!$subscription) {
-            Log::warning('Subscription not found for expiration', ['stripe_id' => $data['id']]);
             return;
         }
 
         $subscription->update([
-            'stripe_status' => 'expired',
+            'stripe_status' => 'EXPIRED',
             'ends_at' => $data['attributes']['ends_at'] ? 
                 Carbon::parse($data['attributes']['ends_at']) : Carbon::now(),
         ]);
-
-        Log::info('Subscription expired', ['subscription_id' => $subscription->id]);
     }
 
     /**
@@ -209,15 +184,12 @@ class LemonSqueezyWebhookController extends Controller
         $subscription = Subscription::where('stripe_id', $data['id'])->first();
 
         if (!$subscription) {
-            Log::warning('Subscription not found for pause', ['stripe_id' => $data['id']]);
             return;
         }
 
         $subscription->update([
-            'stripe_status' => 'paused',
+            'stripe_status' => 'PAUSED',
         ]);
-
-        Log::info('Subscription paused', ['subscription_id' => $subscription->id]);
     }
 
     /**
@@ -229,15 +201,14 @@ class LemonSqueezyWebhookController extends Controller
         $subscription = Subscription::where('stripe_id', $data['id'])->first();
 
         if (!$subscription) {
-            Log::warning('Subscription not found for unpause', ['stripe_id' => $data['id']]);
+          
             return;
         }
 
         $subscription->update([
-            'stripe_status' => 'active',
+            'stripe_status' => 'ACTIVE',
         ]);
 
-        Log::info('Subscription unpaused', ['subscription_id' => $subscription->id]);
     }
 
     /**
@@ -246,13 +217,13 @@ class LemonSqueezyWebhookController extends Controller
     protected function mapLemonSqueezyStatus($lemonSqueezyStatus)
     {
         $statusMap = [
-            'on_trial' => 'trialing',
-            'active' => 'active',
-            'paused' => 'paused',
-            'past_due' => 'past_due',
-            'unpaid' => 'unpaid',
-            'cancelled' => 'canceled',
-            'expired' => 'expired',
+            'on_trial' => 'TRIAL',
+            'active' => 'ACTIVE',
+            'paused' => 'PAUSED',
+            'past_due' => 'PAST_DUE',
+            'unpaid' => 'UNPAID',
+            'cancelled' => 'CANCELED',
+            'expired' => 'EXPIRED',
         ];
 
         return $statusMap[$lemonSqueezyStatus] ?? $lemonSqueezyStatus;

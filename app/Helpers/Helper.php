@@ -306,15 +306,26 @@ public static function getTopWebsites($days = 7,$teamUserIds)
         $thresholdTime = Carbon::now()->subMinutes(10);
         $today = Carbon::today();
 
-        $onlineMembersCount = UserActivity::whereDate('user_activities.start_datetime', $today)
-            ->join('users', 'users.id', 'user_activities.user_id')
-            ->where('start_datetime', '>=', $thresholdTime)
+        $onlineMembersCount = UserProductivitySummary::where('date', $today->format('Y-m-d'))
+            ->where('user_productivity_summaries.updated_at', '>=', $thresholdTime)
+            ->join('users', 'users.id', 'user_productivity_summaries.user_id')
+            ->where('user_productivity_summaries.total_seconds', '>', 0)
             ->where(function ($query) use ($userId) {
                 $query->where('users.parent_user_id', $userId)
                     ->orWhere('users.id', $userId);
             })
-            ->distinct('user_activities.user_id')
+            ->distinct('user_productivity_summaries.user_id')
             ->count();
+
+        // $onlineMembersCount = UserActivity::whereDate('user_activities.start_datetime', $today)
+        //     ->join('users', 'users.id', 'user_activities.user_id')
+        //     ->where('start_datetime', '>=', $thresholdTime)
+        //     ->where(function ($query) use ($userId) {
+        //         $query->where('users.parent_user_id', $userId)
+        //             ->orWhere('users.id', $userId);
+        //     })
+        //     ->distinct('user_activities.user_id')
+        //     ->count();
 
         return $onlineMembersCount;
     }
@@ -341,20 +352,18 @@ public static function getTopWebsites($days = 7,$teamUserIds)
     }
     public static function getUserSubscription($userId)
     {
-        Stripe::setApiKey(config('app.stripe_key'));
         $user = User::find($userId);
         $teamMemberCount = User::where('parent_user_id', $user->id)->count() + 1;
         if ($user->isPayPalSubscribed()) {
             $subscription = $user->subscriptions()->first();
             $paypalSubscriptionId = $subscription->stripe_id;
-            $subscriptionData = Helper::getPayPalSubscription($paypalSubscriptionId);
-
-            if ($subscriptionData) {
-                $priceAmount = $subscriptionData['billing_info']['last_payment']['amount']['value'];
-                $currency = $subscriptionData['billing_info']['last_payment']['amount']['currency_code'];
-                $current_period_end = Carbon::parse($subscriptionData['billing_info']['next_billing_time']);
-                $current_period_start = Carbon::parse($subscriptionData['create_time']);
-                $totalAmount = $priceAmount * $teamMemberCount;
+        
+            if ($subscription) {
+                $priceAmount = $subscription->stripe_price / config('app.unit_price'); 
+                $currency = '$';
+                $current_period_end = Carbon::parse($subscription->ends_at)->format('Y-m-d');
+                $current_period_start = Carbon::parse($subscription->created_at)->format('Y-m-d');
+                $totalAmount = $subscription->stripe_price;
             }
         } else {
             $priceAmount = config('app.unit_price');
@@ -499,5 +508,13 @@ public static function getTopWebsites($days = 7,$teamUserIds)
         }
 
         return $completeReport;
+    }
+    public static function getTodaysAttendanceCount($teamUserIds)
+    {
+        $today = Carbon::today()->format('Y-m-d');
+        $attendanceCount = UserProductivitySummary::where('date', $today)
+            ->whereIn('user_id', $teamUserIds)
+            ->count();
+            return $attendanceCount;
     }
 }
