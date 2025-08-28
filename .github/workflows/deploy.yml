@@ -1,4 +1,4 @@
-name: Deploy Laravel API to Hostinger
+name: Deploy Laravel API to Boxinall Softech Server
 
 on:
   push:
