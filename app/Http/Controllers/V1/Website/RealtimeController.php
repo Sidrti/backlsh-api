@@ -92,52 +92,49 @@ class RealtimeController extends Controller
         });
         return $users;
     }
-   private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5, $status = null)
+private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5, $status = null)
 {
     $thirtyMinutesAgo = now()->subMinutes(30);
     $tenMinutesAgo = now()->subMinutes(10);
 
-    $query = UserActivity::select([
-            'user_activities.user_id',
-            'users.name',
+    // First get all users
+    $users = User::select([
+        'users.id as user_id',
+        'users.name',
+        'users.profile_picture'
+    ])
+    ->where(function ($query) use ($userId) {
+        $query->where('users.parent_user_id', $userId)
+            ->orWhere('users.id', $userId);
+    })
+    ->get();
+
+    // Then get latest activity for each user
+    $result = $users->map(function ($user) use ($thirtyMinutesAgo, $tenMinutesAgo, $threshold, $status) {
+        // Get latest activity for this user
+        $latestActivity = UserActivity::select([
+            'user_activities.process_id',
+            'user_activities.productivity_status',
+            'user_activities.created_at',
             'processes.process_name',
             'processes.id as process_id',
             'processes.icon as icon_url',
-            'processes.type as process_type',
-            'user_activities.productivity_status',
-            'user_activities.created_at',
-            'users.profile_picture',
-            DB::raw("CASE 
-                WHEN user_activities.created_at >= '{$tenMinutesAgo}' THEN 'ONLINE' 
-                ELSE 'OFFLINE' 
-            END as online_status")
+            'processes.type as process_type'
         ])
-        ->leftJoin('users', 'users.id', '=', 'user_activities.user_id')
         ->leftJoin('processes', 'processes.id', '=', 'user_activities.process_id')
-        ->where(function ($query) use ($userId) {
-            $query->where('users.parent_user_id', $userId)
-                  ->orWhere('users.id', $userId);
-        })
+        ->where('user_activities.user_id', $user->user_id)
         ->where('user_activities.start_datetime', '>=', Carbon::today())
-        ->whereIn('user_activities.id', function ($subquery) use ($thirtyMinutesAgo) {
-            $subquery->select(DB::raw('MAX(id)'))
-                     ->from('user_activities')
-                     ->where('start_datetime', '>=', Carbon::today())
-                     ->groupBy('user_id');
-        })
-        ->orderByRaw("CASE WHEN user_activities.created_at >= '{$tenMinutesAgo}' THEN 0 ELSE 1 END")
-        ->orderBy('user_activities.created_at', 'desc');
+        ->orderBy('user_activities.created_at', 'desc')
+        ->first();
 
-    $latestActivities = $query->get();
+        // Determine online status
+        $onlineStatus = 'OFFLINE';
+        if ($latestActivity && $latestActivity->created_at >= $tenMinutesAgo) {
+            $onlineStatus = 'ONLINE';
+        }
 
-    // Calculate productivity ratios and apply filters
-    $result = $latestActivities->map(function ($activity) use ($userId, $thirtyMinutesAgo, $threshold, $status) {
-        $activity->icon_url = asset('storage/' . ($process->icon_url ??config(('app.process_default_image'))));
-        $activity->profile_picture = (new User([
-        'profile_picture' => $activity->profile_picture
-    ]))->profile_picture;
         // Get productivity stats for this user
-        $productivityStats = UserActivity::where('user_id', $activity->user_id)
+        $productivityStats = UserActivity::where('user_id', $user->user_id)
             ->where('start_datetime', '>=', $thirtyMinutesAgo)
             ->selectRaw('
                 COUNT(*) as total_count,
@@ -145,8 +142,8 @@ class RealtimeController extends Controller
             ')
             ->first();
 
-        $productiveRatio = $productivityStats->total_count > 0 
-            ? ($productivityStats->productive_count / $productivityStats->total_count) 
+        $productiveRatio = $productivityStats->total_count > 0
+            ? ($productivityStats->productive_count / $productivityStats->total_count)
             : 0;
 
         // Apply productivity filter
@@ -157,22 +154,37 @@ class RealtimeController extends Controller
             return null;
         }
 
+        // Fix the icon_url assignment (was using undefined $process variable)
+        $iconUrl = $latestActivity && $latestActivity->icon_url 
+            ? asset('storage/' . $latestActivity->icon_url)
+            : asset('storage/' . config('app.process_default_image'));
+
+        $profilePicture = (new User([
+            'profile_picture' => $user->profile_picture
+        ]))->profile_picture;
+
         return [
-            'user_id' => $activity->user_id,
-            'name' => $activity->name,
-            'process_name' => $activity->process_name,
-            'productivity_status' => $activity->productivity_status,
-            'profile_picture' => $activity->profile_picture,
-            'process_id' => $activity->process_id,
-            'process_type' => $activity->process_type,
-            'last_working_datetime' => $activity->created_at,
-            'status' => $activity->online_status,
+            'user_id' => $user->user_id,
+            'name' => $user->name,
+            'process_name' => $latestActivity->process_name ?? null,
+            'productivity_status' => $latestActivity->productivity_status ?? null,
+            'profile_picture' => $profilePicture,
+            'process_id' => $latestActivity->process_id ?? null,
+            'process_type' => $latestActivity->process_type ?? null,
+            'last_working_datetime' => $latestActivity->created_at ?? null,
+            'status' => $onlineStatus,
             'productive_ratio' => round($productiveRatio, 2),
-            'icon_url' => $activity->icon_url
+            'icon_url' => $iconUrl
         ];
     })->filter()->values();
 
-    return $result->all();
+    // Sort by online status first, then by last activity
+    $sorted = $result->sortBy([
+        ['status', 'desc'], // ONLINE first, OFFLINE second
+        ['last_working_datetime', 'desc']
+    ])->values();
+
+    return $sorted->all();
 }
 
     private function countNonProductiveUsers($userId, $threshold = 0.5)

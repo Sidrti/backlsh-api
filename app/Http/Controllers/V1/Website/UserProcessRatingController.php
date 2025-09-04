@@ -49,17 +49,20 @@ class UserProcessRatingController extends Controller
             ]);
         }
     }
-    public function fetchProcessRating(Request $request)
-    {
-        $searchQuery = $request->get('search');
-        $currentUser = auth()->user();
-        $teamUserIds = User::where('id', $currentUser->id)
-            ->orWhere('parent_user_id', $currentUser->id)
-            ->when($currentUser->parent_user_id, function ($query) use ($currentUser) {
-                return $query->orWhere('parent_user_id', $currentUser->parent_user_id);
-            })
-            ->pluck('id');
+public function fetchProcessRating(Request $request)
+{
+    $searchQuery = $request->get('search');
+    $processType = $request->get('process_type', 'app'); // Default to 'app'
+    $currentUser = auth()->user();
+    $teamUserIds = User::where('id', $currentUser->id)
+        ->orWhere('parent_user_id', $currentUser->id)
+        ->when($currentUser->parent_user_id, function ($query) use ($currentUser) {
+            return $query->orWhere('parent_user_id', $currentUser->parent_user_id);
+        })
+        ->pluck('id');
 
+    if ($processType === 'app') {
+        // Original code for user_activities (applications)
         $query = Process::join('user_activities', function ($join) use ($teamUserIds) {
             $join->on('processes.id', '=', 'user_activities.process_id')
                 ->whereIn('user_activities.user_id', $teamUserIds);
@@ -72,29 +75,56 @@ class UserProcessRatingController extends Controller
                 'processes.id',
                 'processes.process_name',
                 'processes.type',
-                 DB::raw("CONCAT('" . asset('storage') . "/', COALESCE(processes.icon, '" . config('app.process_default_image') . "')) AS icon_url"),
+                DB::raw("CONCAT('" . asset('storage') . "/', COALESCE(processes.icon, '" . config('app.process_default_image') . "')) AS icon_url"),
                 DB::raw('COALESCE(user_process_ratings.rating, "NEUTRAL") AS rating'),
                 DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) / 3600) AS total_time')
             )
             ->distinct('processes.process_name')
-            ->groupBy('processes.id', 'processes.process_name','processes.icon', 'processes.type', 'user_process_ratings.rating')
+            ->groupBy('processes.id', 'processes.process_name', 'processes.icon', 'processes.type', 'user_process_ratings.rating')
             ->where('processes.process_name', '!=', '-1')
-             ->where('processes.process_name', '!=', 'idle');
+            ->where('processes.process_name', '!=', 'idle');
 
-            if ($searchQuery) {
-                $query->where(function ($q) use ($searchQuery) {
-                    $q->where('processes.process_name', 'like', '%' . $searchQuery . '%')
-                    ->orWhere('processes.type', 'like', '%' . $searchQuery . '%');
-                });
-            }
+        if ($searchQuery) {
+            $query->where(function ($q) use ($searchQuery) {
+                $q->where('processes.process_name', 'like', '%' . $searchQuery . '%')
+                  ->orWhere('processes.type', 'like', '%' . $searchQuery . '%');
+            });
+        }
+    } else {
+        // Query for user_sub_activities (websites)
+        $query = DB::table('user_sub_activities')
+            ->join('user_activities', 'user_sub_activities.user_activity_id', '=', 'user_activities.id')
+            ->join('processes', 'user_sub_activities.process_id', '=', 'processes.id')
+            ->leftJoin('user_process_ratings', function ($join) use ($currentUser) {
+                $join->on('user_process_ratings.process_id', '=', 'user_sub_activities.process_id')
+                    ->where('user_process_ratings.user_id', '=', $currentUser->id);
+            })
+            ->whereIn('user_activities.user_id', $teamUserIds)
+            ->select(
+                'processes.id as id',
+                'processes.process_name as process_name',
+                DB::raw('"website" as type'),
+                DB::raw("CONCAT('" . asset('storage') . "/', COALESCE(processes.icon, '" . config('app.process_default_image') . "')) AS icon_url"),
+                DB::raw('COALESCE(user_process_ratings.rating, "NEUTRAL") AS rating'),
+                DB::raw('SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime) / 3600) AS total_time')
+            )
+            ->where('user_sub_activities.title', '!=', '-1')
+            ->where('user_sub_activities.title', '!=', 'idle')
+            ->groupBy('processes.id', 'process_name', 'user_process_ratings.rating','icon_url','type','rating');
 
-            $query->paginate(30);
-            $processRatings = $query->orderByDesc('total_time')->paginate(30);
-
-
-        return response()->json([
-            'status_code' => 1,
-            'data' => $processRatings,
-        ]);
+        if ($searchQuery) {
+            $query->where(function ($q) use ($searchQuery) {
+                $q->where('user_sub_activities.title', 'like', '%' . $searchQuery . '%')
+                  ->orWhere(DB::raw('"website"'), 'like', '%' . $searchQuery . '%');
+            });
+        }
     }
+
+    $processRatings = $query->orderByDesc('total_time')->paginate(30);
+
+    return response()->json([
+        'status_code' => 1,
+        'data' => $processRatings,
+    ]);
+}
 }
