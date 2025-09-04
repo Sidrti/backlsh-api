@@ -249,10 +249,13 @@ class DashboardController extends Controller
 
         // Format the time values for display
         $topMembers->transform(function ($member) {
+             $member->profile_picture = (new User([
+        'profile_picture' => $member->profile_picture
+    ]))->profile_picture;
             $member->productive_time = Helper::convertSecondsInReadableFormat($member->productive_time);
             $member->total_time = Helper::convertSecondsInReadableFormat($member->total_time);
             return $member;
-        });
+        }); 
         return $topMembers;
         // return [
         //     'period' => $days === 1 ? 'Today' : "Last {$days} Days",

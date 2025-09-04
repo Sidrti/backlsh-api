@@ -68,7 +68,7 @@ class User extends Authenticatable
     public function getProfilePictureAttribute($value)
     {
         if (!$value) {
-            return null;
+            return asset('storage/' . (config(('app.user_default_image'))));
         }
 
         if (filter_var($value, FILTER_VALIDATE_URL)) {
