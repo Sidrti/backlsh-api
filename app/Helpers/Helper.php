@@ -251,42 +251,42 @@ class Helper
 
         return $query;
     }
-public static function getTopWebsites($days = 7,$teamUserIds)
-{
-  $today = Carbon::today();
-  $startDate = $today->copy()->subDays($days - 1)->startOfDay()->format('Y-m-d H:i:s');
-  $endDate   = $today->endOfDay()->format('Y-m-d H:i:s');
+    public static function getTopWebsites($days = 7,$teamUserIds)
+    {
+    $today = Carbon::today();
+    $startDate = $today->copy()->subDays($days - 1)->startOfDay()->format('Y-m-d H:i:s');
+    $endDate   = $today->endOfDay()->format('Y-m-d H:i:s');
 
 
-    // Calculate total time for percentage calculation
-    $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
+        // Calculate total time for percentage calculation
+        $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
 
-    // Main query
-    $query = UserSubactivity::selectRaw(
-            'SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)) as total_seconds,
-             user_sub_activities.productivity_status,
-             processes.process_name,
-             processes.icon,
-             processes.type as process_type'
-        )
-        ->join('user_activities', 'user_sub_activities.user_activity_id', '=', 'user_activities.id')
-        ->join('processes', 'user_sub_activities.process_id', '=', 'processes.id')
-        ->whereIn('user_activities.user_id', $teamUserIds)
-        ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
-        ->whereNotIn('processes.process_name', ['-1', 'LockApp', 'Idle'])
-        ->groupBy('user_sub_activities.productivity_status', 'processes.process_name', 'processes.icon', 'processes.type')
-        ->orderByDesc('total_seconds')
-        ->limit(5)
-        ->get()
-        ->map(function ($website) use ($totalTime) {
-            $website->icon_url = asset('storage/' . ($website->icon ?? config('app.process_default_image')));
-            $website->time_used_human = Helper::convertSecondsInReadableFormat($website->total_seconds);
-            $website->percentage_time = $totalTime > 0 ? round(($website->total_seconds / $totalTime) * 100, 2) : 0;
-            return $website;
-        });
+        // Main query
+        $query = UserSubactivity::selectRaw(
+                'SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)) as total_seconds,
+                user_sub_activities.productivity_status,
+                processes.process_name,
+                processes.icon,
+                processes.type as process_type'
+            )
+            ->join('user_activities', 'user_sub_activities.user_activity_id', '=', 'user_activities.id')
+            ->join('processes', 'user_sub_activities.process_id', '=', 'processes.id')
+            ->whereIn('user_activities.user_id', $teamUserIds)
+            ->whereBetween('user_sub_activities.start_datetime', [$startDate, $endDate])
+            ->whereNotIn('processes.process_name', ['-1', 'LockApp', 'Idle'])
+            ->groupBy('user_sub_activities.productivity_status', 'processes.process_name', 'processes.icon', 'processes.type')
+            ->orderByDesc('total_seconds')
+            ->limit(5)
+            ->get()
+            ->map(function ($website) use ($totalTime) {
+                $website->icon_url = asset('storage/' . ($website->icon ?? config('app.process_default_image')));
+                $website->time_used_human = Helper::convertSecondsInReadableFormat($website->total_seconds);
+                $website->percentage_time = $totalTime > 0 ? round(($website->total_seconds / $totalTime) * 100, 2) : 0;
+                return $website;
+            });
 
-    return $query;
-}
+        return $query;
+    }
 
     public static function getDomainFromUrl($url)
     {
@@ -306,26 +306,26 @@ public static function getTopWebsites($days = 7,$teamUserIds)
         $thresholdTime = Carbon::now()->subMinutes(10);
         $today = Carbon::today();
 
-        $onlineMembersCount = UserProductivitySummary::where('date', $today->format('Y-m-d'))
-            ->where('user_productivity_summaries.updated_at', '>=', $thresholdTime)
-            ->join('users', 'users.id', 'user_productivity_summaries.user_id')
-            ->where('user_productivity_summaries.total_seconds', '>', 0)
-            ->where(function ($query) use ($userId) {
-                $query->where('users.parent_user_id', $userId)
-                    ->orWhere('users.id', $userId);
-            })
-            ->distinct('user_productivity_summaries.user_id')
-            ->count();
-
-        // $onlineMembersCount = UserActivity::whereDate('user_activities.start_datetime', $today)
-        //     ->join('users', 'users.id', 'user_activities.user_id')
-        //     ->where('start_datetime', '>=', $thresholdTime)
+        // $onlineMembersCount = UserProductivitySummary::where('date', $today->format('Y-m-d'))
+        //     ->where('user_productivity_summaries.updated_at', '>=', $thresholdTime)
+        //     ->join('users', 'users.id', 'user_productivity_summaries.user_id')
+        //     ->where('user_productivity_summaries.total_seconds', '>', 0)
         //     ->where(function ($query) use ($userId) {
         //         $query->where('users.parent_user_id', $userId)
         //             ->orWhere('users.id', $userId);
         //     })
-        //     ->distinct('user_activities.user_id')
+        //     ->distinct('user_productivity_summaries.user_id')
         //     ->count();
+
+        $onlineMembersCount = UserActivity::whereDate('user_activities.start_datetime', $today)
+            ->join('users', 'users.id', 'user_activities.user_id')
+            ->where('start_datetime', '>=', $thresholdTime)
+            ->where(function ($query) use ($userId) {
+                $query->where('users.parent_user_id', $userId)
+                    ->orWhere('users.id', $userId);
+            })
+            ->distinct('user_activities.user_id')
+            ->count();
 
         return $onlineMembersCount;
     }
@@ -516,5 +516,12 @@ public static function getTopWebsites($days = 7,$teamUserIds)
             ->whereIn('user_id', $teamUserIds)
             ->count();
             return $attendanceCount;
+    }
+    public static function hasUsedBacklsh($teamUserIds)
+    {
+        $usedCount = UserProductivitySummary::whereIn('user_id', $teamUserIds)
+            ->where('total_seconds', '>', 0)
+            ->count();
+            return $usedCount > 0;
     }
 }

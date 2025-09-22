@@ -36,17 +36,26 @@ class DashboardController extends Controller
         $todayUserAttendanceRequestOnly = $request->input('user_attendance_req_only', false);
 
         if ($topMemberRequestOnly) {
+            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+                return response()->json(config('dummy.top_members'));
+            }
             $topMembers = $this->getTopMostProductiveMembers($userId, $request->input('top_member_days', 1));
-            return response()->json(['status_code' => 1, 'data' => ['top_members' => $topMembers]]);
+            return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_members' => $topMembers]]);
         }
         if ($topProcessRequestOnly) {
+            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+                return response()->json(config('dummy.top_processes'));
+            }
             $topProcesses = Helper::getTopProcesses($request->input('top_process_days', 7), $teamUserIds);
             $topWebsites = Helper::getTopWebsites($request->input('top_process_days', 7), $teamUserIds);
-            return response()->json(['status_code' => 1, 'data' => ['top_processes' => ['apps' => $topProcesses, 'websites' => $topWebsites]]]);
+            return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_processes' => ['apps' => $topProcesses, 'websites' => $topWebsites]]]);
         }
         if ($todayUserAttendanceRequestOnly) {
+            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+                return response()->json(config('dummy.attendance'));
+            }
             $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds);
-            return response()->json(['status_code' => 1, 'data' => ['todays_users_attendance_list' => $todaysUsersAttendanceList]]);
+            return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['todays_users_attendance_list' => $todaysUsersAttendanceList]]);
         }
 
         $totalHoursWorked = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate);
@@ -60,15 +69,15 @@ class DashboardController extends Controller
         $todayTeamAttendance = $this->getTeamAttendanceToday($teamUserIds);
         $topMembers = $this->getTopMostProductiveMembers($userId, 1);
 
-        $totalMembersInTeam = count($teamUserIds); // +1 for the admin user
+        $totalMembersInTeam = count($teamUserIds); 
         $weekProductivityPercentage = Helper::getWeeklyProductivityReport($teamUserIds);
-                    
-        // $topProcess = Helper::getTopProcesses(7, $teamUserIds);
-        // $topWebsites = Helper::getTopWebsites(7, $teamUserIds);
-        // $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds);
-        // $productivityTips = $this->getProductivityTips();
+
+        if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+            return response()->json(config('dummy.dashboard'));
+        }
 
         $data =  [
+            'dummy'=> false, 
             'total_time_worked' => $totalHoursWorked,
             'total_productive_hours' => $totalProductiveHours,
             'total_non_productive_hours' => $totalNonProductiveHours,

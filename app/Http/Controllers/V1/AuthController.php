@@ -356,8 +356,12 @@ class AuthController extends Controller
             return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not registered']);
         }
     }
-    public function fetchBacklshAppUrl()
+    public function fetchBacklshAppUrl(Request $request)
     {
+        if($request->has('os') && $request->os == 'mac') {
+            $filePath = config('app.mac_app_setup_link');
+            return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
+        }
         $filePath = config('app.app_setup_link');
         return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
     }

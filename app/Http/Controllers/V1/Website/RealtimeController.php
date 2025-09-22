@@ -15,6 +15,12 @@ class RealtimeController extends Controller
     public function fetchRealtimeUpdates(Request $request)
     {
         $userId = auth()->user()->id;
+        $teamUserIds = User::where('parent_user_id', $userId)
+            ->orWhere('id', $userId)
+            ->pluck('id');
+        if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+            return response()->json(config('dummy.realtime'));
+        }
         $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
         if ($request->has('filter')) {
             if ($request->filter == 'PRODUCTIVE_FROM_30_MIN') {

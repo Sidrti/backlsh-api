@@ -9,6 +9,7 @@ use App\Services\PayPalSubscriptions;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use League\Csv\Reader;
 
@@ -93,9 +94,17 @@ class TeamController extends Controller
             ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
             ->get();
 
+        $teamUserIds = $teamMembers->pluck('id');
+
+        if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
+            $demoMember = (object) config('dummy.team_member')[0];
+            $teamMembers = collect([$demoMember])->merge($teamMembers);
+        }
+
         $totalMembersCount = $teamMembers->count();
         $activeMemberCount = 0;
         $inActiveMemberCount = 0;
+        
         foreach($teamMembers as $item) {
             $item->activity_status == 'ACTIVE' ? $activeMemberCount++ : $inActiveMemberCount++;
         }
@@ -109,7 +118,7 @@ class TeamController extends Controller
     
     public function fetchSampleCsvUrl()
     {
-        $filePath = storage_path('app/public/sample/sample.csv');
+        $filePath = storage_path('app/public/uploads/default/sample.csv');
         return Response::download($filePath, 'sample.csv');
     }
 

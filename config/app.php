@@ -78,6 +78,8 @@ return [
 
     'app_setup_link' => env('APP_SETUP_LINK'),
 
+    'mac_app_setup_link' => env('MAC_SETUP_LINK'),
+
     'unit_price' => env('UNIT_PRICE'),
 
     'openai_api_key' => env('OPENAI_API_KEY'),
