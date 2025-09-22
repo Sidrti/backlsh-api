@@ -5,11 +5,13 @@ namespace App\Http\Controllers\V1\Website;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\Process;
+use App\Models\User;
 use App\Models\UserActivity;
 use App\Models\UserScreenshot;
 use App\Models\UserSubActivity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class WebsiteScreenshotController extends Controller
@@ -17,11 +19,27 @@ class WebsiteScreenshotController extends Controller
     public function fetchScreenshotsByUser(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|exists:users,id',
-            // 'start_time' => 'nullable|string|date_format:h:i A',
-            // 'end_time' => 'nullable|string|date_format:h:i A|after_or_equal:start_time',
+            'user_id' => ['required','integer',
+                function ($attribute, $value, $fail) {
+                    if ($value != 0 && !\DB::table('users')->where('id', $value)->exists()) {
+                        $fail('The selected '.$attribute.' is invalid.');
+                    }
+                },
+            ],
             'timezone_offset_minutes' => 'required|integer'
         ]);
+         if($request->input('user_id') == 0) {
+            return response()->json(config('dummy.screenshots'));
+        }
+        // $teamUserIds = User::where('parent_user_id', $userId)
+        //     ->orWhere('id', $userId)
+        //     ->pluck('id');
+        // if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
+        //     $dummyData = Cache::remember('dummy_screenshots', 3600, function () {
+        //     return config('dummy.screenshots');
+        // });
+        //  return response()->json($dummyData);
+        // }
 
         $timezoneOffset = $request->input('timezone_offset_minutes'); // In minutes
         $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)))
