@@ -55,7 +55,7 @@ class Helper
         $filename = rand(10000, 100000) . '_' . time() . '_' . $file->getClientOriginalName();
         if ($saveLocal) {
             $filePath = $file->storeAs($dir, $filename, 'public'); // 'public' disk to store in 'storage/app/public'
-            return config('app.media_base_url').$filePath;
+            return $filePath; // Return relative path, let the model accessor handle URL construction
         } else {
             $filename = rand(10000, 100000) . '_' . time() . '.' . $file->getClientOriginalExtension();
             $imageKit = new ImageKit(
@@ -507,7 +507,27 @@ class Helper
             $currentDate->addDay();
         }
 
-        return $completeReport;
+        // Calculate totals for the week to determine UI action
+        $totalProductiveSeconds = $summaries->sum('productive_seconds');
+        $totalNonproductiveSeconds = $summaries->sum('nonproductive_seconds');
+        $totalNeutralSeconds = $summaries->sum('neutral_seconds');
+        $totalSeconds = $summaries->sum('total_seconds');
+
+        // Determine UI action based on work type
+        $uiAction = "NO_BUTTON";
+        
+        if ($totalSeconds == 0) {
+            // No work at all - show download button
+            $uiAction = 'SHOW_DOWNLOAD_BUTTON';
+        } elseif ($totalProductiveSeconds == 0 && $totalNonproductiveSeconds == 0 && $totalNeutralSeconds > 0) {
+            // Only neutral work - show productivity ratings button
+            $uiAction = 'SHOW_PRODUCTIVITY_RATINGS_BUTTON';
+        }
+
+        return [
+            'days' => $completeReport,
+            'ui_action' => $uiAction
+        ];
     }
     public static function getTodaysAttendanceCount($teamUserIds)
     {
@@ -524,4 +544,274 @@ class Helper
             ->count();
             return $usedCount > 0;
     }
+    // Add these methods to your existing Helper.php class (app/Helpers/Helper.php)
+
+/**
+ * Get projects list for specific user
+ * 
+ * @param int $userId User ID
+ * @param string $startDate Start date
+ * @param string $endDate End date
+ * @return array Projects assigned to user with details
+ */
+public static function getProjectsForUser($userId, $startDate, $endDate)
+{
+    $projects = DB::table('projects')
+        ->join('project_members', 'projects.id', '=', 'project_members.project_id')
+        ->where('project_members.user_id', $userId)
+        ->select(
+            'projects.id',
+            'projects.name as project_name',
+            'projects.status',
+            'projects.start_date',
+            'projects.end_date'
+        )
+        ->get();
+
+    $projectsList = [];
+
+    foreach ($projects as $project) {
+        $timeSpentByUser = self::calculateProjectTimeByUser($project->id, $userId, $startDate, $endDate);
+        $totalTimeTracked = self::calculateTotalProjectTime($project->id, $startDate, $endDate);
+        $timeProgressPercentage = $totalTimeTracked > 0 ? (($timeSpentByUser/$totalTimeTracked) * 100) : 0;
+
+        $tasks = self::calculateProjectProgress($project->id);
+
+        $projectsList[] = [
+            'project_id' => $project->id,
+            'project_name' => $project->project_name,
+            'status' => $project->status,
+            'time_spent_by_user' => self::convertSecondsInReadableFormat($timeSpentByUser),
+            'time_spent_by_user_seconds' => $timeSpentByUser,
+            'total_time_tracked' => self::convertSecondsInReadableFormat($totalTimeTracked),
+            'total_time_tracked_seconds' => $totalTimeTracked,
+            'task_done' => $tasks['completedTasks'],
+            'task_assigned' => $tasks['totalTasksAssigned'],
+            'time_progress_percentage' => round($timeProgressPercentage,1),
+            'start_date' => $project->start_date ? Carbon::parse($project->start_date)->format('d-m-Y') : null,
+            'end_date' => $project->end_date ? Carbon::parse($project->end_date)->format('d-m-Y') : null,
+        ];
+    }
+
+    return $projectsList;
+}
+
+/**
+ * Get active projects list for entire team
+ * 
+ * @param array $teamUserIds Array of team user IDs
+ * @param string $startDate Start date
+ * @param string $endDate End date
+ * @return array Active projects with team statistics
+ */
+public static function getActiveProjectsForTeam($teamUserIds)
+{
+    // Get all active projects that have team members
+    $projects = DB::table('projects')
+        ->join('project_members', 'projects.id', '=', 'project_members.project_id')
+        ->whereIn('project_members.user_id', $teamUserIds)
+        ->where('projects.status', 'ACTIVE')
+        ->select(
+            'projects.id',
+            'projects.name as project_name',
+            'projects.status',
+            'projects.start_date',
+            'projects.end_date'
+        )
+        ->distinct()
+        ->get();
+
+    // Calculate total time tracked by entire team (not just on projects)
+    $totalTeamTimeTracked = DB::table('user_activities')
+        ->whereIn('user_id', $teamUserIds)
+        ->sum(DB::raw('TIMESTAMPDIFF(SECOND, start_datetime, end_datetime)')) ?? 0;
+
+    $projectsList = [];
+
+    foreach ($projects as $project) {
+        // Time spent by entire team on this project
+        $timeSpentByTeam = self::calculateTotalProjectTime($project->id);
+        
+        // Calculate percentage of total team time spent on this project
+        $percentageOfTotalTime = $totalTeamTimeTracked > 0 
+            ? round(($timeSpentByTeam / $totalTeamTimeTracked) * 100, 2) 
+            : 0;
+        
+        // Calculate progress percentage
+        $progressPercentage = self::calculateProjectProgress($project->id);
+
+        $projectsList[] = [
+            'project_id' => $project->id,
+            'project_name' => $project->project_name,
+            'status' => $project->status,
+            'time_spent_by_team' => self::convertSecondsInReadableFormat($timeSpentByTeam),
+            'time_spent_by_team_seconds' => $timeSpentByTeam,
+            'percentage_of_total_time' => $percentageOfTotalTime,
+            'progress_percentage' => round($progressPercentage, 2),
+            'start_date' => $project->start_date ? Carbon::parse($project->start_date)->format('d-m-Y') : null,
+            'end_date' => $project->end_date ? Carbon::parse($project->end_date)->format('d-m-Y') : null,
+        ];
+    }
+
+    // Sort by time spent descending
+    usort($projectsList, function($a, $b) {
+        return $b['time_spent_by_team_seconds'] - $a['time_spent_by_team_seconds'];
+    });
+
+    return $projectsList;
+}
+
+    /**
+     * Calculate time spent by specific user on a project
+     * 
+     * @param int $projectId Project ID
+     * @param int $userId User ID
+     * @param string $startDate Start date
+     * @param string $endDate End date
+     * @return int Total seconds
+     */
+    public static function calculateProjectTimeByUser($projectId, $userId, $startDate, $endDate)
+    {
+        $totalSeconds = DB::table('user_activities')
+            ->where('user_id', $userId)
+            ->where('project_id', $projectId)
+            ->whereBetween('start_datetime', [$startDate, $endDate])
+            ->whereRaw("DATE(start_datetime) = DATE(end_datetime)")
+            ->sum(DB::raw('TIMESTAMPDIFF(SECOND, start_datetime, end_datetime)'));
+
+        return $totalSeconds ?? 0;
+    }
+
+    /**
+     * Calculate total time tracked on a project by all users
+     * 
+     * @param int $projectId Project ID
+     * @param string $startDate Start date
+     * @param string $endDate End date
+     * @return int Total seconds
+     */
+    public static function calculateTotalProjectTime($projectId)
+    {
+        $totalSeconds = DB::table('user_activities')
+            ->where('project_id', $projectId)
+            ->sum(DB::raw('TIMESTAMPDIFF(SECOND, start_datetime, end_datetime)'));
+
+        return $totalSeconds ?? 0;
+    }
+
+    /**
+     * Calculate project progress based on completed tasks
+     * 
+     * @param int $projectId Project ID
+     * @return float Progress percentage
+     */
+    public static function calculateProjectProgress($projectId)
+    {
+        $totalTasks = DB::table('tasks')
+            ->where('project_id', $projectId)
+            ->count();
+
+        if ($totalTasks === 0) {
+            return [
+                'totalTasksAssigned' => 0,
+                'completedTasks' => 0
+            ];
+        }
+
+        $completedTasks = DB::table('tasks')
+            ->where('project_id', $projectId)
+            ->where('status', 'DONE')
+            ->count();
+
+        return [
+            'totalTasksAssigned' => $totalTasks,
+            'completedTasks' => $completedTasks
+        ];
+    }
+
+    /**
+     * Get total projects assigned count
+     * 
+     * @param int $userId User ID
+     * @return int Count
+     */
+    public static function getTotalProjectsAssigned($userId)
+    {
+        return DB::table('project_members')
+            ->where('user_id', $userId)
+            ->count();
+    }
+
+    /**
+     * Get total tasks assigned count
+     * 
+     * @param int $userId User ID
+     * @return int Count
+     */
+    public static function getTotalTasksAssigned($userId)
+    {
+        return DB::table('tasks')
+            ->where('assignee_id', $userId)
+            ->count();
+    }
+
+    /**
+     * Get count of overdue tasks for user
+     * 
+     * @param int $userId User ID
+     * @return int Count
+     */
+    public static function getTasksOverdue($userId, $team = true)
+    {
+        return DB::table('tasks')
+            ->when($team, function ($query) use ($userId) {
+                // If $team is true, use whereIn
+                $query->whereIn('assignee_id', $userId);
+            }, function ($query) use ($userId) {
+                // If $team is false, use where
+                $query->where('assignee_id', $userId);
+            })
+            ->where('status', '!=', 'DONE')
+            ->where('due_date', '<', Carbon::now())
+            ->count();
+    }
+  public static function getProjectCountByStatus($userId,$status="OVERDUE",$teamUserIds=[])
+  {
+        $status = strtoupper((string) $status);
+        $today = Carbon::now()->toDateString();
+        
+        $query = DB::table('projects')
+            ->where(function ($query) use ($userId,$teamUserIds) {
+                // Projects created by the user
+                $query->where('created_by',$userId )
+                      // OR Projects where the user is a member (using a correlated subquery on the project_members table)
+                      ->orWhereExists(function ($subquery) use ($userId,$teamUserIds) {
+                          $subquery->select(DB::raw(1))
+                                   ->from('project_members')
+                                   // FIX: Use whereColumn for correlated query to ensure proper binding
+                                   ->whereColumn('project_members.project_id', 'projects.id')
+                                   ->whereIn('project_members.user_id', $teamUserIds);
+                      });
+            });
+
+        if ($status === 'OVERDUE') {
+            // An overdue project is an ACTIVE project that is past its end date.
+            $query->where('status', 'ACTIVE')
+                  ->whereNotNull('end_date')
+                  ->where('end_date', '<', $today);
+        } else {
+            // Filter by one of the standard ENUM statuses (ACTIVE, ON_HOLD, COMPLETED, CANCELLED)
+            $validStatuses = ['ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
+            
+            if (in_array($status, $validStatuses)) {
+                $query->where('status', $status);
+            } else {
+                // If an invalid status is passed, return 0
+                return 0;
+            }
+        }
+        return $query->count();
+    }
+
+
 }

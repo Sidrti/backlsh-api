@@ -22,7 +22,7 @@ class DashboardController extends Controller
     {
         $this->chatGptService = $chatGptService;
     }
-    public function fetchAdminDashboard(Request $request)
+  public function fetchAdminDashboard(Request $request)
     {
         $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
         $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
@@ -30,10 +30,11 @@ class DashboardController extends Controller
         $teamUserIds = User::where('parent_user_id', $userId)
             ->orWhere('id', $userId)
             ->pluck('id');
-        // $teamUserIds = $teamUserIds->toArray();
+            
         $topMemberRequestOnly = $request->input('top_member_req_only', false);
         $topProcessRequestOnly = $request->input('top_process_req_only', false);
         $todayUserAttendanceRequestOnly = $request->input('user_attendance_req_only', false);
+    //    $activeProjectsRequestOnly = $request->input('active_projects_req_only', false);
 
         if ($topMemberRequestOnly) {
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
@@ -42,6 +43,7 @@ class DashboardController extends Controller
             $topMembers = $this->getTopMostProductiveMembers($userId, $request->input('top_member_days', 1));
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_members' => $topMembers]]);
         }
+        
         if ($topProcessRequestOnly) {
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
                 return response()->json(config('dummy.top_processes'));
@@ -50,6 +52,7 @@ class DashboardController extends Controller
             $topWebsites = Helper::getTopWebsites($request->input('top_process_days', 7), $teamUserIds);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_processes' => ['apps' => $topProcesses, 'websites' => $topWebsites]]]);
         }
+        
         if ($todayUserAttendanceRequestOnly) {
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
                 return response()->json(config('dummy.attendance'));
@@ -57,6 +60,12 @@ class DashboardController extends Controller
             $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['todays_users_attendance_list' => $todaysUsersAttendanceList]]);
         }
+
+        // NEW: Handle active projects request only
+        // if ($activeProjectsRequestOnly) {
+        //     $activeProjectsList = Helper::getActiveProjectsForTeam($teamUserIds, $startDate, $endDate);
+        //     return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['active_projects_list' => $activeProjectsList]]);
+        // }
 
         $totalHoursWorked = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate);
         $totalProductiveHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'PRODUCTIVE');
@@ -70,7 +79,9 @@ class DashboardController extends Controller
         $topMembers = $this->getTopMostProductiveMembers($userId, 1);
 
         $totalMembersInTeam = count($teamUserIds); 
-        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($teamUserIds);
+        $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
+        $activeProjectsList = Helper::getActiveProjectsForTeam($teamUserIds, $startDate, $endDate);
+        $projectOverdue = Helper::getProjectCountByStatus($userId,'OVERDUE',$teamUserIds);
 
         if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
             return response()->json(config('dummy.dashboard'));
@@ -87,9 +98,10 @@ class DashboardController extends Controller
             'today_team_attendance' => $todayTeamAttendance,
             'top_members' => $topMembers,
             'total_members' => $totalMembersInTeam,
-            'week_productivity_percent' => $weekProductivityPercentage,
-            // 'top_processes' => ['apps'=> $topProcess,'websites'=>$topWebsites],
-            // 'todays_users_attendance_list' => $todaysUsersAttendanceList,
+            'week_productivity_percent' => $weekProductivityReport['days'],
+            'week_productivity_ui_action' => $weekProductivityReport['ui_action'],
+            'active_project_list' => $activeProjectsList,
+            'projects_overdue' => $projectOverdue
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -110,7 +122,7 @@ class DashboardController extends Controller
         $monthUserAttendance = $this->getUserMonthAttendance($userId);
         $userThisMonthRank = $this->getUserRankOfmonth($userId);
         $userPeekHours = $this->getUserPeekHours($userId);
-        $weekProductivityPercentage = Helper::getWeeklyProductivityReport($teamUserIds);
+        $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
 
         //$productivityTips = $this->getProductivityTips();
 
@@ -123,13 +135,13 @@ class DashboardController extends Controller
             'month_user_attendance' => $monthUserAttendance,
             'month_user_rank' => $userThisMonthRank,
             'user_peek_hours' => $userPeekHours,
-            'week_productivity_percent' => $weekProductivityPercentage,
+            'week_productivity_percent' => $weekProductivityReport['days'],
+            'week_productivity_ui_action' => $weekProductivityReport['ui_action'],
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
-    private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
+ private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
     {
-        // Single query with aggregation at database level
         $summaries = DB::table('user_productivity_summaries as ups')
             ->join('users', 'users.id', '=', 'ups.user_id')
             ->select([
@@ -151,7 +163,6 @@ class DashboardController extends Controller
             ->orderBy('ups.date')
             ->get();
 
-        // Transform the results
         return $summaries->map(function ($summary) {
             $date = Carbon::parse($summary->date)->format('d-m-Y');
             $productiveHours = round($summary->total_productive_seconds / 3600, 1);
@@ -364,7 +375,6 @@ class DashboardController extends Controller
 
         // Prepare optimized data for AI
         $analysisData = $this->prepareAiAnalysisData($userId);
-
         try {
             $prompt = $this->generateAiPrompt($analysisData);
             $response = $this->chatGptService->askChatGpt($prompt);
@@ -525,6 +535,18 @@ class DashboardController extends Controller
     private function generateAiPrompt($analysisData)
     {
         $totalSeconds = Helper::convertSecondsInReadableFormat($analysisData['metrics']->total_seconds);
+        $metrics = $analysisData['metrics'] ?? null;
+        $productivePercent = $metrics->productive_percent ?? 'N/A';
+        $totalSeconds = $metrics->total_seconds ?? 0;
+        $readableTotal = Helper::convertSecondsInReadableFormat($totalSeconds);
+        
+        $blockers = $analysisData['productivity_blockers'] ?? collect();
+        $blockerNames = $blockers->pluck('process_name')->implode(', ') ?: 'No data available';
+        
+        $focusPatterns = $analysisData['focus_patterns'] ?? [];
+        $longestFocus = !empty($focusPatterns[0]) ? $focusPatterns[0] : null;
+        $focusDuration = $longestFocus->duration_minutes ?? 'N/A';
+        $focusProcess = $longestFocus->process_name ?? 'N/A';
         return <<<EOT
             You are a productivity expert analyzing team work patterns from time tracking data. 
             
@@ -555,10 +577,10 @@ class DashboardController extends Controller
             </ul>
 
             Data Analysis:
-            - Team Productivity: {$analysisData['metrics']->productive_percent}%
-            - Total Tracked Time: {$totalSeconds}
-            - Top Blockers: {$analysisData['productivity_blockers']->pluck('process_name')->implode(', ')}
-            - Longest Focus Session: {$analysisData['focus_patterns'][0]->duration_minutes} mins on {$analysisData['focus_patterns'][0]->process_name}
+            - Team Productivity: {$productivePercent}%
+            - Total Tracked Time: {$readableTotal}
+            - Top Blockers: {$blockerNames}
+            - Longest Focus Session: {$focusDuration} mins on {$focusProcess}
 
             EOT;
     }
@@ -642,4 +664,5 @@ class DashboardController extends Controller
 
         return implode("\n", $result);
     }
+
 }

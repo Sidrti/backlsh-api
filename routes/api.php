@@ -5,12 +5,16 @@ use App\Http\Controllers\V1\App\ScreenshotController;
 use App\Http\Controllers\V1\App\UserActivityController;
 use App\Http\Controllers\V2\App\UserActivityController as UserActivityControllerV2;
 use App\Http\Controllers\V1\AuthController;
+use App\Http\Controllers\V1\ProjectController;
+use App\Http\Controllers\V1\ProjectMemberController;
+use App\Http\Controllers\V1\TaskController;
 use App\Http\Controllers\V1\Website\AttendanceController;
 use App\Http\Controllers\V1\Website\DashboardController;
 use App\Http\Controllers\V1\Website\PaymentController;
 use App\Http\Controllers\V1\Website\RealtimeController;
 use App\Http\Controllers\V1\Website\ReportController;
 use App\Http\Controllers\V1\Website\TeamController;
+use App\Http\Controllers\V1\Website\ProjectReportController;
 use App\Http\Controllers\V1\Website\UserProcessRatingController;
 use App\Http\Controllers\V1\Website\WebsiteScreenshotController;
 use Illuminate\Http\Request;
@@ -87,6 +91,27 @@ Route::prefix('v1')->group(function () {
             Route::post('/payment/checkout', [PaymentController::class,'createCheckout']);
             Route::get('/payment/billing-details', [PaymentController::class,'fetchBillingDetails']);
             Route::get('/payment/redirect-billing-portal', [PaymentController::class,'rediectToBilling']);
+
+            // Projects Routes
+            Route::get('/projects', [ProjectController::class, 'index']);
+            Route::post('/projects', [ProjectController::class, 'store']);
+            Route::get('/projects/{project}', [ProjectController::class, 'show']);
+            Route::post('/projects/{project}', [ProjectController::class, 'update']);
+            Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+
+            // Project Members Routes
+            Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index']);
+            Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store']);
+            Route::delete('/projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy']);
+
+            // Tasks Routes
+            Route::get('/projects/{project}/tasks', [TaskController::class, 'indexByProject']);
+            Route::post('/tasks', [TaskController::class, 'store']);
+            Route::get('/tasks/{task}', [TaskController::class, 'show']);
+            Route::post('/tasks/{task}', [TaskController::class, 'update']);
+            Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+
+            Route::get('/project-report', [ProjectReportController::class, 'fetchProjectReport']);
 
         });
     });

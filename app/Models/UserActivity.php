@@ -9,7 +9,7 @@ class UserActivity extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'process_id', 'start_datetime', 'end_datetime', 'productivity_status'];
+    protected $fillable = ['user_id', 'project_id', 'task_id', 'process_id', 'start_datetime', 'end_datetime', 'productivity_status'];
 
     protected $casts = [
         'start_datetime' => 'datetime',
@@ -24,5 +24,15 @@ class UserActivity extends Model
     public function process()
     {
         return $this->belongsTo(Process::class, 'process_id');
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function task()
+    {
+        return $this->belongsTo(Task::class);
     }
 }

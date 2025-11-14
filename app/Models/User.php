@@ -12,7 +12,6 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Cashier\Billable;
 use Laravel\Sanctum\HasApiTokens;
-use TCG\Voyager\Models\Role;
 
 class User extends Authenticatable
 {
@@ -84,6 +83,22 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserActivity::class);
     }
+
+    public function createdProjects()
+    {
+        return $this->hasMany(Project::class, 'created_by');
+    }
+
+    public function projects()
+    {
+        return $this->belongsToMany(Project::class, 'project_members');
+    }
+
+    public function assignedTasks()
+    {
+        return $this->hasMany(Task::class, 'assignee_id');
+    }
+
     public function isPayPalSubscribed()
     {
         $today = Carbon::today();
