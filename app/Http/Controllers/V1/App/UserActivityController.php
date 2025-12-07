@@ -5,6 +5,8 @@ namespace App\Http\Controllers\V1\App;
 use App\Http\Controllers\Controller;
 use App\Helpers\Helper;
 use App\Models\Process;
+use App\Models\Project;
+use App\Models\Task;
 use App\Models\UserActivity;
 use App\Models\UserSubActivity;
 use Carbon\Carbon;
@@ -32,11 +34,27 @@ class UserActivityController extends Controller
                     'type' => $activity['type'],
                 ]);
 
+                // Validate and prepare project_id and task_id
+                $projectId = $activity['projectId'] ?? null;
+                $taskId = $activity['taskId'] ?? null;
+
+                // Verify project exists if projectId is provided
+                if ($projectId !== null && !Project::where('id', $projectId)->exists()) {
+                    $projectId = null;
+                }
+
+                // Verify task exists if taskId is provided
+                if ($taskId !== null && !Task::where('id', $taskId)->exists()) {
+                    $taskId = null;
+                }
+
                 $userActivity = null;
                 if ($activity['endDateTime'] != '' && $activity['endDateTime'] != null) {
                     $userActivity = UserActivity::create([
                         'user_id' => $userId,
                         'process_id' => $process->id,
+                        'project_id' => $projectId,
+                        'task_id' => $taskId,
                         'productivity_status' => $activity['productivityStatus'],
                         'start_datetime' => $activity['startDateTime'],
                         'end_datetime' => $activity['endDateTime'],
@@ -92,9 +110,25 @@ class UserActivityController extends Controller
                             }
 
                             if ($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $userActivity) {
+                                // Extract and validate project_id and task_id from subProcess
+                                $subProjectId = $subProcess['projectId'] ?? null;
+                                $subTaskId = $subProcess['taskId'] ?? null;
+
+                                // Verify project exists if provided
+                                if ($subProjectId !== null && !Project::where('id', $subProjectId)->exists()) {
+                                    $subProjectId = null;
+                                }
+
+                                // Verify task exists if provided
+                                if ($subTaskId !== null && !Task::where('id', $subTaskId)->exists()) {
+                                    $subTaskId = null;
+                                }
+
                                 UserSubActivity::create([
                                     'user_activity_id' => $userActivity->id,
                                     'process_id' => $websiteProcess->id,
+                                    'project_id' => $subProjectId,
+                                    'task_id' => $subTaskId,
                                     'title' => $subProcess['title'] ?? '',
                                     'website_url' => $subProcess['url'],
                                     'productivity_status' => $subProcess['productivityStatus'],
@@ -141,7 +175,6 @@ class UserActivityController extends Controller
                 ($productiveSeconds + $nonproductiveSeconds + $neutralSeconds)
             );
         }
-
         $response = [
             'status_code' => 1,
             'data' => ['total_time' => $productiveSeconds + $nonproductiveSeconds + $neutralSeconds],
@@ -157,7 +190,7 @@ class UserActivityController extends Controller
         $startDate = Carbon::now()->startOfDay();
         $endDate = Carbon::now()->endOfDay();
         $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, null, false);
-        $totalTimeInSeconds = $totalTimeInHours * 3600;
+        $totalTimeInSeconds = $totalTimeInHours;
         $response = [
             'status_code' => 1,
             'data' => ['total_time' => $totalTimeInSeconds]
@@ -190,6 +223,8 @@ class UserActivityController extends Controller
                             'endDateTime' => $timestamp,
                             'title' => $data['Title'],
                             'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url), auth()->user()->id),
+                            'projectId' => $data['ProjectId'] ?? null,
+                            'taskId' => $data['TaskId'] ?? null,
                         ]
                     ];
                 }
@@ -200,6 +235,8 @@ class UserActivityController extends Controller
                     'endDateTime' => $timestamp,
                     'type' => $processType,
                     'productivityStatus' => Helper::computeActivityProductivityStatus($processName, auth()->user()->id),
+                    'projectId' => $data['ProjectId'] ?? null,
+                    'taskId' => $data['TaskId'] ?? null,
                     'subProcess' => $subProcessData
                 ];
             } else {
@@ -225,6 +262,8 @@ class UserActivityController extends Controller
                                 'endDateTime' => $timestamp,
                                 'title' => $data['Title'],
                                 'productivityStatus' => Helper::computeActivityProductivityStatus(Helper::getDomainFromUrl($url), auth()->user()->id),
+                                'projectId' => $data['ProjectId'] ?? null,
+                                'taskId' => $data['TaskId'] ?? null,
                             ];
                             $currentSubProcessData[] = $newSubProcessData;
                         }
@@ -240,6 +279,8 @@ class UserActivityController extends Controller
                     'endDateTime' => $processedData[$processName]['endDateTime'],
                     'type' => $processedData[$processName]['type'],
                     'productivityStatus' => $processedData[$processName]['productivityStatus'],
+                    'projectId' => $processedData[$processName]['projectId'],
+                    'taskId' => $processedData[$processName]['taskId'],
                     'subProcess' => $processedData[$processName]['subProcess']
                 ];
                 unset($processedData[$processName]);
