@@ -5,9 +5,9 @@ use App\Http\Controllers\V1\App\ScreenshotController;
 use App\Http\Controllers\V1\App\UserActivityController;
 use App\Http\Controllers\V2\App\UserActivityController as UserActivityControllerV2;
 use App\Http\Controllers\V1\AuthController;
-use App\Http\Controllers\V1\ProjectController;
-use App\Http\Controllers\V1\ProjectMemberController;
-use App\Http\Controllers\V1\TaskController;
+use App\Http\Controllers\V1\Website\ProjectController;
+use App\Http\Controllers\V1\Website\ProjectMemberController;
+use App\Http\Controllers\V1\Website\TaskController;
 use App\Http\Controllers\V1\Website\AttendanceController;
 use App\Http\Controllers\V1\Website\DashboardController;
 use App\Http\Controllers\V1\Website\PaymentController;
@@ -54,6 +54,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/screenshot/create',[ScreenshotController::class,'createScreenshot']);
 
             Route::get('/auth/user', [AuthController::class, 'me']);
+
+            Route::get('/projects', [ProjectController::class, 'index']);
+            Route::get('/projects/{project}/tasks', [TaskController::class, 'indexByProject']);
         });
         
         Route::group(['prefix' => 'website'], function () {
@@ -107,6 +110,7 @@ Route::prefix('v1')->group(function () {
             // Tasks Routes
             Route::get('/projects/{project}/tasks', [TaskController::class, 'indexByProject']);
             Route::post('/tasks', [TaskController::class, 'store']);
+            Route::post('/tasks/import', [TaskController::class, 'import']);
             Route::get('/tasks/{task}', [TaskController::class, 'show']);
             Route::post('/tasks/{task}', [TaskController::class, 'update']);
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);

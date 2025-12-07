@@ -43,6 +43,56 @@ return [
                 ["day" => "Fri", "date" => "05-09-2025", "productivity_percent" => 50, "productive_time" => "3h 24m", "nonproductive_time" => "24m", "neutral_time" => "4h 48m", "total_time" => "8h 36m"],
                 ["day" => "Sat", "date" => "06-09-2025", "productivity_percent" => 30, "productive_time" => "2h 6m", "nonproductive_time" => "12m", "neutral_time" => "2h 54m", "total_time" => "5h 12m"],
                 ["day" => "Sun", "date" => "07-09-2025", "productivity_percent" => 10, "productive_time" => "1h 12m", "nonproductive_time" => "0s", "neutral_time" => "2h 6m", "total_time" => "3h 18m"]
+            ],
+            "active_project_list" => [
+                [
+                    "project_id" => 5,
+                    "project_name" => "E-Commerce Platform Upgrade",
+                    "status" => "ACTIVE",
+                    "time_spent" => "9h 32m",
+                    "time_spent_seconds" => "34320",
+                    "total_time_tracked" => "9h 32m",
+                    "total_time_tracked_seconds" => "34320",
+                    "task_done" => 4,
+                    "task_assigned" => 18,
+                    "time_progress_percentage" => 31,
+                    "percentage_of_total_time" => 27,
+                    "progress_percentage" => 22,
+                    "start_date" => "22-11-2025",
+                    "end_date" => "18-12-2025"
+                ],
+                [
+                    "project_id" => 7,
+                    "project_name" => "Website Redesign",
+                    "status" => "ACTIVE",
+                    "time_spent" => "12h 10m",
+                    "time_spent_seconds" => "43800",
+                    "total_time_tracked" => "12h 10m",
+                    "total_time_tracked_seconds" => "43800",
+                    "task_done" => 5,
+                    "task_assigned" => 20,
+                    "time_progress_percentage" => 42,
+                    "percentage_of_total_time" => 35,
+                    "progress_percentage" => 25,
+                    "start_date" => "20-11-2025",
+                    "end_date" => "10-12-2025"
+                ],
+                [
+                    "project_id" => 12,
+                    "project_name" => "Mobile App Development",
+                    "status" => "ACTIVE",
+                    "time_spent" => "7h 55m",
+                    "time_spent_seconds" => "28500",
+                    "total_time_tracked" => "7h 55m",
+                    "total_time_tracked_seconds" => "28500",
+                    "task_done" => 3,
+                    "task_assigned" => 14,
+                    "time_progress_percentage" => 28,
+                    "percentage_of_total_time" => 22,
+                    "progress_percentage" => 18,
+                    "start_date" => "18-11-2025",
+                    "end_date" => "28-12-2025"
+                ],
             ]
         ],
 
@@ -832,6 +882,50 @@ return [
                             ]
                         ]
                     ]
+                ],
+            ],
+            "projects_assigned_list" => [
+                [
+                    "project_id" => 8,
+                    "project_name" => "Inventory Management System",
+                    "status" => "ACTIVE",
+                    "time_spent" => "6h 45m",
+                    "time_spent_seconds" => "24300",
+                    "total_time_tracked" => "6h 45m",
+                    "total_time_tracked_seconds" => "24300",
+                    "task_done" => 2,
+                    "task_assigned" => 10,
+                    "time_progress_percentage" => 45,
+                    "start_date" => "21-11-2025",
+                    "end_date" => "15-12-2025"
+                ],
+                [
+                    "project_id" => 11,
+                    "project_name" => "AI Chatbot Integration",
+                    "status" => "ON_HOLD",
+                    "time_spent" => "3h 20m",
+                    "time_spent_seconds" => "12000",
+                    "total_time_tracked" => "3h 20m",
+                    "total_time_tracked_seconds" => "12000",
+                    "task_done" => 1,
+                    "task_assigned" => 8,
+                    "time_progress_percentage" => 32,
+                    "start_date" => "23-11-2025",
+                    "end_date" => "20-12-2025"
+                ],
+                [
+                    "project_id" => 14,
+                    "project_name" => "Marketing Automation Dashboard",
+                    "status" => "COMPLETED",
+                    "time_spent" => "9h 05m",
+                    "time_spent_seconds" => "32700",
+                    "total_time_tracked" => "9h 05m",
+                    "total_time_tracked_seconds" => "32700",
+                    "task_done" => 5,
+                    "task_assigned" => 14,
+                    "time_progress_percentage" => 58,
+                    "start_date" => "19-11-2025",
+                    "end_date" => "25-12-2025"
                 ],
             ]
         ]

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V1;
+namespace App\Http\Controllers\V1\Website;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AddProjectMemberRequest;

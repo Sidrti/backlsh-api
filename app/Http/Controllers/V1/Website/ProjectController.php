@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\V1;
+namespace App\Http\Controllers\V1\Website;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
+use App\Helpers\Helper;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
@@ -183,6 +184,9 @@ class ProjectController extends Controller
         }
 
         $project->load(['creator', 'members', 'tasks.assignee']);
+
+        $totalTimeTracked = Helper::calculateTotalProjectTime($project->id);
+        $project->total_time_spent = Helper::convertSecondsInReadableFormat($totalTimeTracked);
         $project->loadCount([
             'tasks',
             'members',

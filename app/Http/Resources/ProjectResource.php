@@ -42,6 +42,7 @@ class ProjectResource extends JsonResource
             'high_priority_tasks_count' => $this->when(isset($this->high_priority_tasks_count), $this->high_priority_tasks_count),
             'medium_priority_tasks_count' => $this->when(isset($this->medium_priority_tasks_count), $this->medium_priority_tasks_count),
             'low_priority_tasks_count' => $this->when(isset($this->low_priority_tasks_count), $this->low_priority_tasks_count),
+            'total_time_spent' => $this->when(isset($this->total_time_spent), $this->total_time_spent),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

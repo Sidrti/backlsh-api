@@ -20,6 +20,7 @@ use Srmklive\PayPal\Services\PayPal as PayPalClient;
 use Stripe\Price;
 use Stripe\Stripe;
 use Stripe\Subscription;
+use Intervention\Image\Facades\Image;
 
 class Helper
 {
@@ -57,17 +58,33 @@ class Helper
             $filePath = $file->storeAs($dir, $filename, 'public'); // 'public' disk to store in 'storage/app/public'
             return $filePath; // Return relative path, let the model accessor handle URL construction
         } else {
-            $filename = rand(10000, 100000) . '_' . time() . '.' . $file->getClientOriginalExtension();
+            // Generate a new filename with .webp extension
+            $filename = rand(10000, 100000) . '_' . time() . '.webp';
+
+            // Convert image to WebP format
+            $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
+            $image = $manager->read($file);
+    
+            $encodedImage = $image->toWebp(40);
+        
+            // Get the actual binary data - THIS IS THE FIX
+            $webpImageData = (string) $encodedImage;
+            
+            // Convert to base64 for ImageKit upload
+            $base64Image = base64_encode($webpImageData);
+
             $imageKit = new ImageKit(
                 config('app.image_kit_public_key'),
                 config('app.image_kit_private_key'),
                 config('app.image_kit_url')
             );
+
+            // Upload the converted image
             $response = $imageKit->uploadFile([
-                "file" => fopen($file->getPathname(), "r"), // Open the file stream
-                "fileName" => $filename, // Use the generated filename
-                "folder" => "/screenshots/", // Optional: specify a folder in ImageKit
-                "useUniqueFileName" => true // Let ImageKit handle unique filenames
+                 'file' => 'data:image/webp;base64,' . $base64Image,
+                'fileName' => $filename,
+                'folder' => '/screenshots/',
+                'useUniqueFileName' => true,
             ]);
 
             // Check if the upload was successful
@@ -76,6 +93,8 @@ class Helper
                 $fileUrl = $response->result->url;
                 return $fileUrl;
             } else {
+                // Log the error for debugging
+                Log::error('ImageKit upload failed: ' . json_encode($response->error));
                 return -1;
             }
         }
@@ -112,7 +131,6 @@ class Helper
             ->join('processes', 'processes.id', 'user_activities.process_id')
             // ->whereBetween('start_datetime', [$startDate, $endDate])
             // ->whereBetween('end_datetime', [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
             ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
             ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
             ->where('processes.process_name', '!=', '-1')
@@ -344,7 +362,7 @@ class Helper
             'role' => $role,
             'is_verified' => $loginType == 2 || $loginType == 3 ? 1 : 0,
             'parent_user_id' => $parentId,
-            'trial_ends_at' => now()->addDays(10),
+            'trial_ends_at' => now()->addDays(14),
             'profile_picture' => $avatarUrl,
         ]);
 
@@ -518,7 +536,8 @@ class Helper
         
         if ($totalSeconds == 0) {
             // No work at all - show download button
-            $uiAction = 'SHOW_DOWNLOAD_BUTTON';
+            //$uiAction = 'SHOW_DOWNLOAD_BUTTON';
+            $uiAction = 'SHOW_PRODUCTIVITY_RATINGS_BUTTON';
         } elseif ($totalProductiveSeconds == 0 && $totalNonproductiveSeconds == 0 && $totalNeutralSeconds > 0) {
             // Only neutral work - show productivity ratings button
             $uiAction = 'SHOW_PRODUCTIVITY_RATINGS_BUTTON';
@@ -554,25 +573,35 @@ class Helper
  * @param string $endDate End date
  * @return array Projects assigned to user with details
  */
-public static function getProjectsForUser($userId, $startDate, $endDate)
+public static function getProjectsForUser($userId, $status = 'all')
 {
-    $projects = DB::table('projects')
+    $query = DB::table('projects')
         ->join('project_members', 'projects.id', '=', 'project_members.project_id')
-        ->where('project_members.user_id', $userId)
-        ->select(
-            'projects.id',
-            'projects.name as project_name',
-            'projects.status',
-            'projects.start_date',
-            'projects.end_date'
-        )
-        ->get();
+        ->where('project_members.user_id', $userId);
+
+    // Add status filter
+    if ($status !== 'all') {
+        if ($status === 'overdue') {
+            $query->where('projects.end_date', '<', Carbon::now())
+                  ->where('projects.status', '!=', 'COMPLETED');
+        } else {
+            $query->where('projects.status', strtoupper($status));
+        }
+    }
+
+    $projects = $query->select(
+        'projects.id',
+        'projects.name as project_name',
+        'projects.status',
+        'projects.start_date',
+        'projects.end_date'
+    )->get();
 
     $projectsList = [];
 
     foreach ($projects as $project) {
-        $timeSpentByUser = self::calculateProjectTimeByUser($project->id, $userId, $startDate, $endDate);
-        $totalTimeTracked = self::calculateTotalProjectTime($project->id, $startDate, $endDate);
+        $timeSpentByUser = self::calculateProjectTimeByUser($project->id,$userId);
+        $totalTimeTracked = self::calculateTotalProjectTime($project->id);
         $timeProgressPercentage = $totalTimeTracked > 0 ? (($timeSpentByUser/$totalTimeTracked) * 100) : 0;
 
         $tasks = self::calculateProjectProgress($project->id);
@@ -581,8 +610,8 @@ public static function getProjectsForUser($userId, $startDate, $endDate)
             'project_id' => $project->id,
             'project_name' => $project->project_name,
             'status' => $project->status,
-            'time_spent_by_user' => self::convertSecondsInReadableFormat($timeSpentByUser),
-            'time_spent_by_user_seconds' => $timeSpentByUser,
+            'time_spent' => self::convertSecondsInReadableFormat($timeSpentByUser),
+            'time_spent_seconds' => $timeSpentByUser,
             'total_time_tracked' => self::convertSecondsInReadableFormat($totalTimeTracked),
             'total_time_tracked_seconds' => $totalTimeTracked,
             'task_done' => $tasks['completedTasks'],
@@ -604,7 +633,7 @@ public static function getProjectsForUser($userId, $startDate, $endDate)
  * @param string $endDate End date
  * @return array Active projects with team statistics
  */
-public static function getActiveProjectsForTeam($teamUserIds)
+public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDate)
 {
     // Get all active projects that have team members
     $projects = DB::table('projects')
@@ -622,9 +651,11 @@ public static function getActiveProjectsForTeam($teamUserIds)
         ->get();
 
     // Calculate total time tracked by entire team (not just on projects)
-    $totalTeamTimeTracked = DB::table('user_activities')
-        ->whereIn('user_id', $teamUserIds)
-        ->sum(DB::raw('TIMESTAMPDIFF(SECOND, start_datetime, end_datetime)')) ?? 0;
+    // $totalTeamTimeTracked = DB::table('user_activities')
+    //     ->whereIn('user_id', $teamUserIds)
+    //     ->sum(DB::raw('TIMESTAMPDIFF(SECOND, start_datetime, end_datetime)')) ?? 0;
+
+    $totalTeamTimeTracked = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
 
     $projectsList = [];
 
@@ -637,15 +668,24 @@ public static function getActiveProjectsForTeam($teamUserIds)
             ? round(($timeSpentByTeam / $totalTeamTimeTracked) * 100, 2) 
             : 0;
         
-        // Calculate progress percentage
-        $progressPercentage = self::calculateProjectProgress($project->id);
+        // Calculate progress percentage based on completed vs total tasks
+        $taskProgress = self::calculateProjectProgress($project->id);
+        $progressPercentage = 0;
+        if (!empty($taskProgress['totalTasksAssigned']) && $taskProgress['totalTasksAssigned'] > 0) {
+            $progressPercentage = ($taskProgress['completedTasks'] / $taskProgress['totalTasksAssigned']) * 100;
+        }
 
         $projectsList[] = [
             'project_id' => $project->id,
             'project_name' => $project->project_name,
             'status' => $project->status,
-            'time_spent_by_team' => self::convertSecondsInReadableFormat($timeSpentByTeam),
-            'time_spent_by_team_seconds' => $timeSpentByTeam,
+            'time_spent' => self::convertSecondsInReadableFormat($timeSpentByTeam),
+            'time_spent_seconds' => $timeSpentByTeam,
+            'total_time_tracked' => self::convertSecondsInReadableFormat($timeSpentByTeam),
+            'total_time_tracked_seconds' => $timeSpentByTeam,
+            'task_done' => $taskProgress['completedTasks'],
+            'task_assigned' => $taskProgress['totalTasksAssigned'],
+            'time_progress_percentage' => $percentageOfTotalTime,
             'percentage_of_total_time' => $percentageOfTotalTime,
             'progress_percentage' => round($progressPercentage, 2),
             'start_date' => $project->start_date ? Carbon::parse($project->start_date)->format('d-m-Y') : null,
@@ -655,7 +695,7 @@ public static function getActiveProjectsForTeam($teamUserIds)
 
     // Sort by time spent descending
     usort($projectsList, function($a, $b) {
-        return $b['time_spent_by_team_seconds'] - $a['time_spent_by_team_seconds'];
+        return $b['time_spent_seconds'] - $a['time_spent_seconds'];
     });
 
     return $projectsList;
@@ -670,13 +710,11 @@ public static function getActiveProjectsForTeam($teamUserIds)
      * @param string $endDate End date
      * @return int Total seconds
      */
-    public static function calculateProjectTimeByUser($projectId, $userId, $startDate, $endDate)
+    public static function calculateProjectTimeByUser($projectId, $userId)
     {
         $totalSeconds = DB::table('user_activities')
             ->where('user_id', $userId)
             ->where('project_id', $projectId)
-            ->whereBetween('start_datetime', [$startDate, $endDate])
-            ->whereRaw("DATE(start_datetime) = DATE(end_datetime)")
             ->sum(DB::raw('TIMESTAMPDIFF(SECOND, start_datetime, end_datetime)'));
 
         return $totalSeconds ?? 0;

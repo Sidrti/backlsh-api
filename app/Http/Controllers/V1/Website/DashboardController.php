@@ -123,6 +123,8 @@ class DashboardController extends Controller
         $userThisMonthRank = $this->getUserRankOfmonth($userId);
         $userPeekHours = $this->getUserPeekHours($userId);
         $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
+        $activeProjectList = Helper::getProjectsForUser($userId,'ACTIVE');
+        $projectOverdue = Helper::getProjectCountByStatus($userId,'OVERDUE',$teamUserIds);
 
         //$productivityTips = $this->getProductivityTips();
 
@@ -137,6 +139,8 @@ class DashboardController extends Controller
             'user_peek_hours' => $userPeekHours,
             'week_productivity_percent' => $weekProductivityReport['days'],
             'week_productivity_ui_action' => $weekProductivityReport['ui_action'],
+            'active_project_list' => $activeProjectList,
+            'project_overdue' => $projectOverdue
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }

@@ -70,7 +70,7 @@ class ReportController extends Controller
         $totalProjectsAssigned = Helper::getTotalProjectsAssigned($userId);
         $totalTasksAssigned = Helper::getTotalTasksAssigned($userId);
         $tasksOverdue = Helper::getTasksOverdue($userId,false);
-        $projectsAssignedList = Helper::getProjectsForUser($userId, $startDate, $endDate);
+        $projectsAssignedList = Helper::getProjectsForUser($userId);
 
         $data =  [
             'process' => $process,

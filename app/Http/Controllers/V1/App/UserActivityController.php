@@ -175,7 +175,6 @@ class UserActivityController extends Controller
                 ($productiveSeconds + $nonproductiveSeconds + $neutralSeconds)
             );
         }
-
         $response = [
             'status_code' => 1,
             'data' => ['total_time' => $productiveSeconds + $nonproductiveSeconds + $neutralSeconds],
@@ -191,7 +190,7 @@ class UserActivityController extends Controller
         $startDate = Carbon::now()->startOfDay();
         $endDate = Carbon::now()->endOfDay();
         $totalTimeInHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, null, false);
-        $totalTimeInSeconds = $totalTimeInHours * 3600;
+        $totalTimeInSeconds = $totalTimeInHours;
         $response = [
             'status_code' => 1,
             'data' => ['total_time' => $totalTimeInSeconds]
