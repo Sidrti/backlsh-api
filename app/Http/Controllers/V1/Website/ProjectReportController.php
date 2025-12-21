@@ -40,7 +40,6 @@ class ProjectReportController extends Controller
 
         // 1. Total Time Invested by entire team
         $totalTimeInvested = $this->getTotalProjectTime($projectId, $startDate, $endDate);
-
         // 2. Count of Total Completed Tasks
         $completedTasksCount = Task::where('project_id', $projectId)
             ->where('status', 'DONE')
@@ -88,7 +87,7 @@ class ProjectReportController extends Controller
         ]);
     }
 
-    private function getTotalProjectTime($projectId, $startDate, $endDate)
+    private function getTotalProjectTime1($projectId, $startDate, $endDate)
     {
         $totalSeconds = UserActivity::where('project_id', $projectId)
             // ->whereBetween('start_datetime', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
@@ -100,7 +99,26 @@ class ProjectReportController extends Controller
             'formatted' => Helper::convertSecondsInReadableFormat($totalSeconds),
         ];
     }
+    private function getTotalProjectTime($projectId, $startDate = null, $endDate = null)
+    {
+        // APPLICATION time → from user_activities
+        $applicationSeconds = UserActivity::join('processes', 'processes.id', '=', 'user_activities.process_id')
+            ->where('user_activities.project_id', $projectId)
+            ->where('processes.type', 'APPLICATION')
+            ->sum(DB::raw('TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)'));
 
+        // BROWSER time → from user_sub_activities (Eloquent)
+        $browserSeconds = UserSubActivity::join('processes', 'processes.id', '=', 'user_sub_activities.process_id')
+            ->where('user_sub_activities.project_id', $projectId)
+            ->sum(DB::raw('TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)'));
+
+        $totalSeconds = $applicationSeconds + $browserSeconds;
+
+        return [
+            'seconds'   => $totalSeconds,
+            'formatted' => Helper::convertSecondsInReadableFormat($totalSeconds),
+        ];
+    }
     private function getProjectMembersCount($projectId)
     {
         return DB::table('project_members')

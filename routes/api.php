@@ -19,6 +19,7 @@ use App\Http\Controllers\V1\Website\UserProcessRatingController;
 use App\Http\Controllers\V1\Website\WebsiteScreenshotController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\V1\Website\ProjectProcessRuleController;
 
 
 Route::prefix('v1')->group(function () { 
@@ -114,8 +115,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/tasks/{task}', [TaskController::class, 'show']);
             Route::post('/tasks/{task}', [TaskController::class, 'update']);
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+            Route::post('/tasks/update/bulk', [TaskController::class, 'bulkUpdate']);
 
             Route::get('/project-report', [ProjectReportController::class, 'fetchProjectReport']);
+
+            // Project Process Rules
+            Route::get('/projects/{project_id}/process-rules', [ProjectProcessRuleController::class, 'index']);
+            Route::post('/projects/{project_id}/process-rules', [ProjectProcessRuleController::class, 'store']);
+            Route::post('/process-rules/{id}', [ProjectProcessRuleController::class, 'update']);
+            Route::delete('/process-rules/{id}', [ProjectProcessRuleController::class, 'destroy']);
 
         });
     });

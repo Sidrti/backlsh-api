@@ -344,6 +344,93 @@ class TaskController extends Controller
         return response()->json($response);
     }
 
+        /**
+     * Bulk update tasks (assignee or status).
+     */
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'task_ids' => 'required|array',
+            'task_ids.*' => 'exists:tasks,id',
+            'assignee_id' => 'nullable|exists:users,id',
+            'status' => 'nullable|string|in:TODO,IN_PROGRESS,DONE',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status_code' => 2,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $taskIds = $request->input('task_ids');
+        $assigneeId = $request->input('assignee_id');
+        $status = $request->input('status');
+
+        if (is_null($assigneeId) && is_null($status)) {
+            return response()->json([
+                'status_code' => 2,
+                'message' => 'Either assignee_id or status must be provided.',
+            ], 422);
+        }
+
+        $tasks = Task::whereIn('id', $taskIds)->get();
+        $user = auth()->user();
+        $project = null;
+
+        foreach ($tasks as $task) {
+            if (is_null($project)) {
+                $project = $task->project;
+            } elseif ($project->id !== $task->project_id) {
+                return response()->json([
+                    'status_code' => 2,
+                    'message' => 'All tasks must belong to the same project.',
+                ], 422);
+            }
+        }
+
+        if ($project->created_by !== $user->id && !$project->members->contains($user->id)) {
+            return response()->json([
+                'status_code' => 2,
+                'message' => 'You do not have access to this project',
+            ], 403);
+        }
+
+        if ($assigneeId) {
+            $assignee = User::find($assigneeId);
+            $projectCreatorId = $project->created_by;
+            $isMember = $project->members()->where('user_id', $assigneeId)->exists();
+            $isCreator = $projectCreatorId == $assigneeId;
+
+            if (!$isMember && !$isCreator) {
+                if ($assignee && $assignee->parent_user_id == $projectCreatorId) {
+                    $project->members()->attach($assigneeId);
+                } else {
+                    return response()->json([
+                        'status_code' => 2,
+                        'message' => 'Assigned user is not a member of this project or the project creator\'s team.',
+                    ], 422);
+                }
+            }
+        }
+
+        $updateData = [];
+        if (!is_null($assigneeId)) {
+            $updateData['assignee_id'] = $assigneeId;
+        }
+        if (!is_null($status)) {
+            $updateData['status'] = $status;
+        }
+
+        Task::whereIn('id', $taskIds)->update($updateData);
+
+        return response()->json([
+            'status_code' => 1,
+            'message' => 'Tasks updated successfully.',
+        ]);
+    }
+
     /**
      * Create or update a task with validation.
      *
@@ -357,15 +444,23 @@ class TaskController extends Controller
     {
         if (!empty($data['assignee_id'])) {
             $assigneeId = $data['assignee_id'];
+            $assignee = User::find($assigneeId);
+            $projectCreatorId = $project->created_by;
 
             $isMember = $project->members()->where('user_id', $assigneeId)->exists();
+            $isCreator = $projectCreatorId == $assigneeId;
 
-            if (!$isMember && $project->created_by != $assigneeId) {
-                if (!$importCall) {
-                     throw new \Exception('Assigned user is not a member of this project. Add this member to the project first.');
-                }
-                else {
-                    $data['assignee_id'] = null;
+            if (!$isMember && !$isCreator) {
+                // Check if the assignee is a team member of the project creator
+                if ($assignee && $assignee->parent_user_id == $projectCreatorId) {
+                    // Add the user to the project members
+                    $project->members()->attach($assigneeId);
+                } else {
+                    if ($importCall) {
+                        $data['assignee_id'] = null;
+                    } else {
+                        throw new \Exception('Assigned user is not a member of this project or the project creator\'s team.');
+                    }
                 }
             }
         }
@@ -394,4 +489,5 @@ class TaskController extends Controller
 
         return Task::create($taskData);
     }
+    
 }

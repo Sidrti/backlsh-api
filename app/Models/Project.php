@@ -84,4 +84,11 @@ class Project extends Model
 
         return 'ON_TRACK';
     }
+        /**
+     * Get all process rules for the project.
+     */
+    public function processRules()
+    {
+        return $this->hasMany(ProjectProcessRule::class);
+    }
 }

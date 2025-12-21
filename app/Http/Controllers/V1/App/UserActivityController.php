@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
+
 class UserActivityController extends Controller
 {
     public function createUserActivity(Request $request)
@@ -26,6 +27,7 @@ class UserActivityController extends Controller
             $nonproductiveSeconds = 0;
             $userId = auth()->user()->id;
             $processedActivityData = $this->getActivityStartEndTime($request->all());
+            $userProjectRules = $this->getUserProjectRules($userId);
 
             foreach ($processedActivityData as $activity) {
                 $activity['process'] = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
@@ -33,9 +35,13 @@ class UserActivityController extends Controller
                     'process_name' => $activity['process'],
                     'type' => $activity['type'],
                 ]);
+                $projectId = $this->determineProjectId(
+                                $activity['process'],
+                                $activity['projectId'] ?? null,
+                                $userProjectRules);
 
                 // Validate and prepare project_id and task_id
-                $projectId = $activity['projectId'] ?? null;
+                // $projectId = $activity['projectId'] ?? null;
                 $taskId = $activity['taskId'] ?? null;
 
                 // Verify project exists if projectId is provided
@@ -109,9 +115,15 @@ class UserActivityController extends Controller
                                 $websiteProcess->save();
                             }
 
-                            if ($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $userActivity) {
+                            if($subProcess['endDateTime'] != '' && $subProcess['endDateTime'] != null && $userActivity) {
                                 // Extract and validate project_id and task_id from subProcess
-                                $subProjectId = $subProcess['projectId'] ?? null;
+                                $subProjectId = $this->determineProjectId(
+                                                    $subProcess['url'],
+                                                    $subProcess['projectId'] ?? null,
+                                                    $userProjectRules,
+                                                    'WEBSITE'
+                                                );
+                               // $subProjectId = $subProcess['projectId'] ?? null;
                                 $subTaskId = $subProcess['taskId'] ?? null;
 
                                 // Verify project exists if provided
@@ -344,4 +356,112 @@ class UserActivityController extends Controller
                 ]
             );
     }
+    /**
+ * Fetch all active project rules for projects the user is a member of
+ */
+private function getUserProjectRules($userId)
+{
+    return DB::table('project_process_rules')
+        ->join('project_members', 'project_process_rules.project_id', '=', 'project_members.project_id')
+        ->where('project_members.user_id', $userId)
+        ->where('project_process_rules.is_active', true)
+        ->orderBy('project_process_rules.priority', 'desc')
+        ->select('project_process_rules.*')
+        ->get();
+}
+
+/**
+ * Determine the project_id based on process rules
+ * 
+ * @param string $processName The process or URL to match
+ * @param int|null $userSelectedProjectId The project_id selected by user
+ * @param Collection $rules Collection of project rules
+ * @param string $type Type of process (default from activity type, or 'WEBSITE' for sub-activities)
+ * @return int|null
+ */
+private function determineProjectId($processName, $userSelectedProjectId, $rules, $type = null)
+{
+    // First, check for priority rules that match
+    $priorityRule = $this->findMatchingRule($processName, $rules->where('priority', true));
+    if ($priorityRule) {
+        // Priority rule found - always use this project_id
+        return $priorityRule->project_id;
+    }
+
+    // No priority rule found, check for non-priority rules
+    $nonPriorityRule = $this->findMatchingRule($processName, $rules->where('priority', false));
+    
+    if ($nonPriorityRule) {
+        // Non-priority rule found, but user selection takes precedence
+        if ($userSelectedProjectId !== null) {
+            return $userSelectedProjectId;
+        }
+        return $nonPriorityRule->project_id;
+    }
+
+    // No rules matched, return user selected project_id
+    return $userSelectedProjectId;
+}
+
+/**
+ * Find a matching rule based on match_type
+ * 
+ * @param string $processName
+ * @param Collection $rules
+ * @return object|null
+ */
+private function findMatchingRule($processName, $rules)
+{
+    foreach ($rules as $rule) {
+        $matched = false;
+        
+        switch ($rule->match_type) {
+            case 'exact':
+                $matched = strtolower($processName) === strtolower($rule->process);
+                break;
+                
+            case 'contains':
+                $matched = stripos($processName, $rule->process) !== false;
+                break;
+                
+            case 'domain':
+                // Extract domain from URL for domain matching
+                $processDomain = Helper::getDomainFromUrl($processName);
+                $ruleDomain = Helper::getDomainFromUrl($rule->process);
+                $matched = $processDomain === $ruleDomain;
+                break;
+        }
+        
+        if ($matched) {
+            return $rule;
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Extract domain from URL
+ * 
+ * @param string $url
+ * @return string
+ */
+// private function extractDomain($url)
+// {
+//     // Add scheme if missing
+//     if (!preg_match("~^(?:f|ht)tps?://~i", $url)) {
+//         $url = "http://" . $url;
+//     }
+    
+//     $host = parse_url($url, PHP_URL_HOST);
+    
+//     if (!$host) {
+//         return strtolower($url);
+//     }
+    
+//     // Remove www. prefix
+//     $domain = preg_replace('/^www\./', '', $host);
+    
+//     return strtolower($domain);
+// }
 }
