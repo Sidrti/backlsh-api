@@ -13,9 +13,11 @@ use App\Services\PayPalSubscriptions;
 use Carbon\Carbon;
 use Exception;
 use File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use ImageKit\ImageKit;
+use Illuminate\Support\Facades\Storage;
+use App\Jobs\SendNotificationEmailJob;
 use Srmklive\PayPal\Services\PayPal as PayPalClient;
 use Stripe\Price;
 use Stripe\Stripe;
@@ -125,24 +127,157 @@ class Helper
             echo $e->getMessage(), PHP_EOL;
         }
     }
+
+    public static function sendMicrosoftTeamsNotificationToUser(string $teamsUserId, string $message): bool
+    {
+        try {
+            $accessToken = self::getMicrosoftGraphAccessToken();
+            if (!$accessToken) {
+                return false;
+            }
+
+            $chatId = self::ensureMicrosoftTeamsOneToOneChat($accessToken, $teamsUserId);
+            if (!$chatId) {
+                return false;
+            }
+
+            return self::sendMicrosoftTeamsChatMessage($accessToken, $chatId, $message);
+        } catch (Exception $e) {
+            Log::error('Microsoft Teams notification failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    public static function sendMicrosoftTeamsWebhookNotification(string $message, ?string $webhookUrl = null): bool
+    {
+        $webhookUrl = $webhookUrl ?: config('services.microsoft_teams.webhook_url');
+
+        if (!$webhookUrl) {
+            Log::error('Microsoft Teams webhook URL is missing');
+            return false;
+        }
+
+        $response = Http::post($webhookUrl, [
+            'text' => $message,
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Microsoft Teams webhook notification failed', ['status' => $response->status(), 'body' => $response->body()]);
+            return false;
+        }
+
+        return true;
+    }
+
+    public static function sendMicrosoftTeamsWebhookNotificationToUser(int $userId, string $message): bool
+    {
+        $webhookUrl = User::where('id', $userId)->value('teams_webhook_url');
+
+        if (!$webhookUrl) {
+            Log::error('Microsoft Teams webhook URL missing for user', ['user_id' => $userId]);
+            return false;
+        }
+
+        return self::sendMicrosoftTeamsWebhookNotification($message, $webhookUrl);
+    }
+
+    private static function getMicrosoftGraphAccessToken(): ?string
+    {
+        $tenantId = config('services.microsoft_graph.tenant_id');
+        $clientId = config('services.microsoft_graph.client_id');
+        $clientSecret = config('services.microsoft_graph.client_secret');
+
+        if (!$tenantId || !$clientId || !$clientSecret) {
+            Log::error('Microsoft Graph credentials missing in services config');
+            return null;
+        }
+
+        $tokenUrl = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token";
+
+        $response = Http::asForm()->post($tokenUrl, [
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'grant_type' => 'client_credentials',
+            'scope' => 'https://graph.microsoft.com/.default',
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Microsoft Graph token request failed', ['status' => $response->status(), 'body' => $response->body()]);
+            return null;
+        }
+
+        return $response->json('access_token');
+    }
+
+    private static function ensureMicrosoftTeamsOneToOneChat(string $accessToken, string $teamsUserId): ?string
+    {
+        $response = Http::withToken($accessToken)
+            ->post('https://graph.microsoft.com/v1.0/chats', [
+                'chatType' => 'oneOnOne',
+                'members' => [
+                    [
+                        '@odata.type' => '#microsoft.graph.aadUserConversationMember',
+                        'roles' => ['owner'],
+                        'user@odata.bind' => "https://graph.microsoft.com/v1.0/users('{$teamsUserId}')",
+                    ],
+                ],
+            ]);
+
+        if ($response->successful()) {
+            return $response->json('id');
+        }
+
+        $body = $response->json();
+        $errorCode = data_get($body, 'error.code');
+        if ($response->status() === 409 || $errorCode === 'Conflict') {
+            $existingChatId = data_get($body, 'error.details.0.target');
+            if ($existingChatId) {
+                return $existingChatId;
+            }
+        }
+
+        Log::error('Microsoft Graph create chat failed', ['status' => $response->status(), 'body' => $response->body()]);
+        return null;
+    }
+
+    private static function sendMicrosoftTeamsChatMessage(string $accessToken, string $chatId, string $message): bool
+    {
+        $response = Http::withToken($accessToken)
+            ->post("https://graph.microsoft.com/v1.0/chats/{$chatId}/messages", [
+                'body' => [
+                    'contentType' => 'text',
+                    'content' => $message,
+                ],
+            ]);
+
+        if (!$response->successful()) {
+            Log::error('Microsoft Graph send chat message failed', ['status' => $response->status(), 'body' => $response->body()]);
+            return false;
+        }
+
+        return true;
+    }
     public static function calculateTotalHoursByUserId($userId, $startDate, $endDate, $status = null, $convertFormatToReadableFormat = true)
     {
-        $userActivities = UserActivity::where('user_id', $userId)
-            ->join('processes', 'processes.id', 'user_activities.process_id')
-            // ->whereBetween('start_datetime', [$startDate, $endDate])
-            // ->whereBetween('end_datetime', [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
-            ->where('processes.process_name', '!=', '-1')
-            ->where('processes.process_name', '!=', 'LockApp')
-            ->where('processes.process_name', '!=', 'Idle')
-            ->get();
+        $startDate = Carbon::parse($startDate)->toDateString();
+        $endDate = Carbon::parse($endDate)->toDateString();
 
-        $filteredActivities = $status ? $userActivities->where('productivity_status', $status) : $userActivities;
+        $status = strtoupper((string) $status);
 
-        $totalSeconds = $filteredActivities->sum(function ($activity) {
-            return Carbon::parse($activity->end_datetime)->diffInSeconds(Carbon::parse($activity->start_datetime));
-        });
+        if ($status === 'PRODUCTIVE') {
+            $column = 'productive_seconds';
+        } elseif ($status === 'NONPRODUCTIVE') {
+            $column = 'nonproductive_seconds';
+        } elseif ($status === 'NEUTRAL') {
+            $column = 'neutral_seconds';
+        } else {
+            $column = 'total_seconds';
+        }
+
+        $totalSeconds = UserProductivitySummary::where('user_id', $userId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->sum($column);
+
         return $convertFormatToReadableFormat ? Helper::convertSecondsInReadableFormat($totalSeconds) : $totalSeconds;
     }
     public static function calculateTotalHoursByParentId($teamUserIds=[], $startDate, $endDate, $status = null, $convertFormatToReadableFormat = true)
@@ -851,5 +986,59 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
         return $query->count();
     }
 
+    /**
+     * Send a notification to a user (saves to DB + sends email).
+     *
+     * @param int $userId          The user to notify
+     * @param string $type         Notification type (e.g. TASK_ASSIGNED, TASK_STATUS_CHANGED, PROJECT_ASSIGNED, PROJECT_MEMBER_ADDED)
+     * @param string $title        Short notification title
+     * @param string $message      Notification message body
+     * @param int|null $triggeredBy  User ID who triggered the notification
+     * @param string|null $relatedType  Related model type (e.g. 'task', 'project')
+     * @param int|null $relatedId     Related model ID
+     * @param array $emailDetails   Key-value pairs to show in the email details table
+     * @param string|null $actionUrl   Optional CTA button URL
+     * @param string|null $actionText  Optional CTA button text
+     * @param bool $sendEmail       Whether to send an email notification
+     * @return \App\Models\Notification|null
+     */
+    public static function sendNotification(
+        int $userId,
+        string $type,
+        string $title,
+        string $message,
+        ?int $triggeredBy = null,
+        ?string $relatedType = null,
+        ?int $relatedId = null,
+        array $emailDetails = [],
+        ?string $actionUrl = null,
+        ?string $actionText = null,
+        bool $sendEmail = true
+    ) {
+        try {
+            $notification = \App\Models\Notification::create([
+                'user_id' => $userId,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'triggered_by' => $triggeredBy,
+                'related_type' => $relatedType,
+                'related_id' => $relatedId,
+            ]);
+
+            if ($sendEmail) {
+                SendNotificationEmailJob::dispatch($userId, $title, $message, $emailDetails, $actionUrl, $actionText);
+            }
+
+            return $notification;
+        } catch (Exception $e) {
+            Log::error('Failed to send notification', [
+                'user_id' => $userId,
+                'type' => $type,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
 
 }

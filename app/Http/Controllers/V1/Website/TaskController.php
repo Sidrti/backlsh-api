@@ -12,6 +12,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
+use App\Helpers\Helper;
+use App\Helpers\NotificationHelper;
 
 class TaskController extends Controller
 {
@@ -62,6 +64,12 @@ class TaskController extends Controller
                     $query->where('status', '!=', 'DONE')
                           ->whereNotNull('due_date')
                           ->whereDate('due_date', '<', now());
+                    break;
+                case 'COMPLETED_LATE':
+                    $query->where('status', 'DONE')
+                          ->whereNotNull('due_date')
+                          ->whereNotNull('completed_at')
+                          ->whereColumn('completed_at', '>', 'due_date');
                     break;
                 case 'APPROACHING':
                     $query->where('status', '!=', 'DONE')
@@ -138,8 +146,18 @@ class TaskController extends Controller
         }
 
         try {
-            $task = $this->createOrUpdateTask($project, $request->validated());
+            $validated = $request->validated();
+            if (array_key_exists('status', $validated) && $validated['status'] === 'DONE') {
+                $validated['completed_at'] = now();
+            }
+
+            $task = $this->createOrUpdateTask($project, $validated);
             $task->load(['project', 'assignee']);
+
+            // Notify assignee if task is assigned
+            if ($task->assignee_id && $task->assignee_id !== $user->id) {
+                NotificationHelper::notifyTaskAssigned($task, $project, $user);
+            }
 
             return response()->json([
                 'status_code' => 1,
@@ -170,7 +188,7 @@ class TaskController extends Controller
             ], 403);
         }
 
-        $task->load(['project', 'assignee']);
+        $task->load(['project', 'assignee', 'checklists']);
 
         return response()->json([
             'status_code' => 1,
@@ -198,8 +216,30 @@ class TaskController extends Controller
         $project = $request->has('project_id') ? Project::findOrFail($request->project_id) : $task->project;
 
         try {
-            $task = $this->createOrUpdateTask($project, $request->validated(), $task);
+            $validated = $request->validated();
+            $oldAssigneeId = $task->assignee_id;
+            $oldStatus = $task->status;
+
+            if (array_key_exists('status', $validated)) {
+                if ($validated['status'] === 'DONE') {
+                    $validated['completed_at'] = now();
+                } else {
+                    $validated['completed_at'] = null;
+                }
+            }
+
+            $task = $this->createOrUpdateTask($project, $validated, $task);
             $task->load(['project', 'assignee']);
+
+            // Notify if assignee changed
+            if (array_key_exists('assignee_id', $validated) && $task->assignee_id != $oldAssigneeId && $task->assignee_id && $task->assignee_id !== $user->id) {
+                NotificationHelper::notifyTaskAssigned($task, $project, $user);
+            }
+
+            // Notify if status changed
+            if (array_key_exists('status', $validated) && $validated['status'] !== $oldStatus) {
+                NotificationHelper::notifyTaskStatusChanged($task, $project, $user, $oldStatus, $validated['status']);
+            }
 
             return response()->json([
                 'status_code' => 1,
@@ -421,9 +461,21 @@ class TaskController extends Controller
         }
         if (!is_null($status)) {
             $updateData['status'] = $status;
+            $updateData['completed_at'] = $status === 'DONE' ? now() : null;
         }
 
         Task::whereIn('id', $taskIds)->update($updateData);
+
+        // Send notifications for bulk updates
+        $updatedTasks = Task::whereIn('id', $taskIds)->with('project')->get();
+        foreach ($updatedTasks as $updatedTask) {
+            if (!is_null($assigneeId) && $assigneeId !== $user->id) {
+                NotificationHelper::notifyTaskAssigned($updatedTask, $project, $user);
+            }
+            if (!is_null($status)) {
+                NotificationHelper::notifyTaskStatusChanged($updatedTask, $project, $user, null, $status);
+            }
+        }
 
         return response()->json([
             'status_code' => 1,
@@ -465,6 +517,39 @@ class TaskController extends Controller
             }
         }
 
+        if ($task) {
+            $taskData = [];
+
+            if (array_key_exists('project_id', $data)) {
+                $taskData['project_id'] = $project->id;
+            }
+
+            if (array_key_exists('name', $data)) {
+                $taskData['name'] = $data['name'];
+            }
+            if (array_key_exists('description', $data)) {
+                $taskData['description'] = $data['description'];
+            }
+            if (array_key_exists('status', $data)) {
+                $taskData['status'] = $data['status'];
+            }
+            if (array_key_exists('priority', $data)) {
+                $taskData['priority'] = $data['priority'];
+            }
+            if (array_key_exists('due_date', $data)) {
+                $taskData['due_date'] = $data['due_date'];
+            }
+            if (array_key_exists('assignee_id', $data)) {
+                $taskData['assignee_id'] = $data['assignee_id'];
+            }
+
+            if (!empty($taskData)) {
+                $task->update($taskData);
+            }
+
+            return $task;
+        }
+
         $taskData = [
             'project_id' => $project->id,
             'name' => $data['name'],
@@ -475,11 +560,6 @@ class TaskController extends Controller
             'assignee_id' => $data['assignee_id'] ?? null,
         ];
 
-        if ($task) {
-            $task->update($taskData);
-            return $task;
-        }
-
         if (isset($data['update_or_create']) && $data['update_or_create']) {
             return Task::updateOrCreate(
                 ['project_id' => $project->id, 'name' => $data['name']],
@@ -489,5 +569,4 @@ class TaskController extends Controller
 
         return Task::create($taskData);
     }
-    
 }

@@ -242,51 +242,125 @@ class DashboardController extends Controller
 
         return $attendance;
     }
-    private function getTopMostProductiveMembers($userId, $days = 1)
-    {
-        $endDate = Carbon::today()->format('Y-m-d');
-        $startDate = Carbon::today()->subDays($days - 1)->format('Y-m-d');
-        $minTimeThreshold = 1800 * $days; // Scale threshold with days (30min per day)
+    // private function getTopMostProductiveMembers($userId, $days = 1)
+    // {
+    //     $endDate = Carbon::today()->format('Y-m-d');
+    //     $startDate = Carbon::today()->subDays($days - 1)->format('Y-m-d');
+    //     $minTimeThreshold = 1800 * $days; // Scale threshold with days (30min per day)
 
-        $topMembers = DB::table('user_productivity_summaries')
-            ->select(
-                'user_productivity_summaries.user_id',
-                'users.name',
-                'users.email',
-                'users.profile_picture',
-                DB::raw('ROUND((SUM(productive_seconds) / NULLIF(SUM(total_seconds), 0)) * 100, 2) as productivity_percent'),
-                DB::raw('SUM(productive_seconds) as productive_time'),
-                DB::raw('SUM(total_seconds) as total_time'),
-            )
-            ->join('users', 'users.id', '=', 'user_productivity_summaries.user_id')
-            ->whereBetween('date', [$startDate, $endDate])
-            ->where(function ($query) use ($userId) {
-                $query->where('users.parent_user_id', $userId)
-                    ->orWhere('users.id', $userId);
-            })
-            ->groupBy('user_id', 'users.name', 'users.email', 'profile_picture')
-            ->havingRaw('SUM(total_seconds) >= ?', [$minTimeThreshold])
-            ->orderByDesc('productivity_percent')
-            ->orderByDesc('productive_time') // Tie-breaker
-            ->limit(5)
-            ->get();
+    //     $topMembers = DB::table('user_productivity_summaries')
+    //         ->select(
+    //             'user_productivity_summaries.user_id',
+    //             'users.name',
+    //             'users.email',
+    //             'users.profile_picture',
+    //             DB::raw('ROUND((SUM(productive_seconds) / NULLIF(SUM(total_seconds), 0)) * 100, 2) as productivity_percent'),
+    //             DB::raw('SUM(productive_seconds) as productive_time'),
+    //             DB::raw('SUM(total_seconds) as total_time'),
+    //         )
+    //         ->join('users', 'users.id', '=', 'user_productivity_summaries.user_id')
+    //         ->whereBetween('date', [$startDate, $endDate])
+    //         ->where(function ($query) use ($userId) {
+    //             $query->where('users.parent_user_id', $userId)
+    //                 ->orWhere('users.id', $userId);
+    //         })
+    //         ->groupBy('user_id', 'users.name', 'users.email', 'profile_picture')
+    //         ->havingRaw('SUM(total_seconds) >= ?', [$minTimeThreshold])
+    //         ->orderByDesc('productivity_percent')
+    //         ->orderByDesc('productive_time') // Tie-breaker
+    //         ->limit(5)
+    //         ->get();
 
-        // Format the time values for display
-        $topMembers->transform(function ($member) {
-             $member->profile_picture = (new User([
-        'profile_picture' => $member->profile_picture
-    ]))->profile_picture;
-            $member->productive_time = Helper::convertSecondsInReadableFormat($member->productive_time);
-            $member->total_time = Helper::convertSecondsInReadableFormat($member->total_time);
-            return $member;
-        }); 
-        return $topMembers;
-        // return [
-        //     'period' => $days === 1 ? 'Today' : "Last {$days} Days",
-        //     'start_date' => $startDate,
-        //     'end_date' => $endDate,
-        //     'members' => $topMembers
-        // ];
+    //     // Format the time values for display
+    //     $topMembers->transform(function ($member) {
+    //          $member->profile_picture = (new User([
+    //     'profile_picture' => $member->profile_picture
+    // ]))->profile_picture;
+    //         $member->productive_time = Helper::convertSecondsInReadableFormat($member->productive_time);
+    //         $member->total_time = Helper::convertSecondsInReadableFormat($member->total_time);
+    //         return $member;
+    //     }); 
+    //     return $topMembers;
+    //     // return [
+    //     //     'period' => $days === 1 ? 'Today' : "Last {$days} Days",
+    //     //     'start_date' => $startDate,
+    //     //     'end_date' => $endDate,
+    //     //     'members' => $topMembers
+    //     // ];
+    // }
+private function getTopMostProductiveMembers($userId, $days = 1)
+{
+    $endDate = Carbon::today();
+    $startDate = Carbon::today()->subDays($days - 1);
+    
+    // 1. Calculate the number of "Workable" days in the range
+    // If you want to include Sundays, we just use the raw $days.
+    // If you want to EXCLUDE Sundays from the penalty, we count only non-Sundays.
+    $workableDays = 0;
+    $tempDate = $startDate->copy();
+    while ($tempDate <= $endDate) {
+        // Only count as a "Standard Work Day" if it's not Sunday
+        // (Remove this check if your team is expected to work 7 days a week)
+        if ($tempDate->dayOfWeek !== Carbon::SUNDAY) {
+            $workableDays++;
+        }
+        $tempDate->addDay();
+    }
+    
+    // Ensure we don't divide by zero if only a Sunday was selected
+    $workableDays = $workableDays ?: 1; 
+
+    // 8 hours per workable day
+    $standardWorkSeconds = $workableDays * 28800; 
+
+    $topMembers = DB::table('user_productivity_summaries')
+        ->select(
+            'user_productivity_summaries.user_id',
+            'users.name',
+            'users.email',
+            'users.profile_picture',
+            DB::raw('SUM(productive_seconds) as total_productive_seconds'),
+            DB::raw('SUM(total_seconds) as total_logged_seconds'),
+            // VALUE SCORE CALCULATION
+            // We calculate how much of a "Full Productive Week" they achieved
+            DB::raw("
+                ROUND(
+                    (SUM(productive_seconds) / $standardWorkSeconds) * 100, 
+                2) as value_score
+            ")
+        )
+        ->join('users', 'users.id', '=', 'user_productivity_summaries.user_id')
+        ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+        ->where(function ($query) use ($userId) {
+            $query->where('users.parent_user_id', $userId)
+                ->orWhere('users.id', $userId);
+        })
+        ->groupBy('user_id', 'users.name', 'users.email', 'profile_picture')
+        ->havingRaw('SUM(total_seconds) >= 3600') 
+        ->orderByDesc('value_score')
+        ->limit(5)
+        ->get();
+
+    $topMembers->transform(function ($member) {
+        $member->productivity_percent = round(($member->total_productive_seconds / $member->total_logged_seconds) * 100, 2);
+        $member->productive_time = Helper::convertSecondsInReadableFormat($member->total_productive_seconds);
+        $member->total_time = Helper::convertSecondsInReadableFormat($member->total_logged_seconds);
+        
+        // Updated Label Logic
+        $member->status = $this->getValueLabel($member->value_score);
+        
+        return $member;
+    }); 
+
+    return $topMembers;
+}
+
+
+    private function getValueLabel($score) {
+        if ($score >= 90) return 'Elite Contributor';
+        if ($score >= 75) return 'High Value';
+        if ($score >= 50) return 'Steady';
+        return 'Low Impact';
     }
     private function getTotalTeamCount($adminId)
     {

@@ -7,6 +7,8 @@ use App\Http\Requests\AddProjectMemberRequest;
 use App\Http\Resources\UserResource;
 use App\Models\Project;
 use App\Models\User;
+use App\Helpers\Helper;
+use App\Helpers\NotificationHelper;
 use Illuminate\Http\JsonResponse;
 
 class ProjectMemberController extends Controller
@@ -60,6 +62,10 @@ class ProjectMemberController extends Controller
         $project->members()->attach($userId);
 
         $user = User::find($userId);
+        $creator = auth()->user();
+
+        // Notify the added member
+        NotificationHelper::notifyProjectMemberAdded($project, $userId, $creator);
 
         return response()->json([
             'status_code' => 1,

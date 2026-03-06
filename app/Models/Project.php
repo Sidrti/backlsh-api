@@ -91,4 +91,12 @@ class Project extends Model
     {
         return $this->hasMany(ProjectProcessRule::class);
     }
+
+    /**
+     * Get all issues for the project.
+     */
+    public function issues()
+    {
+        return $this->hasMany(Issue::class);
+    }
 }
