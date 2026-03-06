@@ -41,6 +41,7 @@ class TaskResource extends JsonResource
             'status' => $this->status,
             'priority' => $this->priority,
             'due_date' => $this->due_date?->format('Y-m-d'),
+            'completed_at' => $this->completed_at?->format('Y-m-d'),
             'deadline_status' => $this->deadline_status,
             'assignee_id' => $this->assignee_id,
             'project' => $this->whenLoaded('project', function () {
@@ -77,6 +78,7 @@ class TaskResource extends JsonResource
                 })->filter();
             }),
             'total_time_spent' => $totalTimeSpent,
+            'checklists' => $this->whenLoaded('checklists'),
         ];
     }
 }

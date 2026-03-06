@@ -35,7 +35,8 @@ class User extends Authenticatable
         'pm_type',
         'pm_last_four',
         'is_verified',
-        'verification_token'
+        'verification_token',
+        'teams_webhook_url'
 
     ];
 
@@ -97,6 +98,16 @@ class User extends Authenticatable
     public function assignedTasks()
     {
         return $this->hasMany(Task::class, 'assignee_id');
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function unreadNotifications()
+    {
+        return $this->hasMany(Notification::class)->where('is_read', false);
     }
 
     public function isPayPalSubscribed()

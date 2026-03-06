@@ -16,11 +16,13 @@ class Task extends Model
         'status',
         'priority',
         'due_date',
+        'completed_at',
         'assignee_id',
     ];
 
     protected $casts = [
         'due_date' => 'date',
+        'completed_at' => 'date',
     ];
 
     /**
@@ -56,10 +58,26 @@ class Task extends Model
     }
 
     /**
+     * Get all of the checklists for the task.
+     */
+    public function checklists()
+    {
+        return $this->hasMany(Checklist::class);
+    }
+
+    /**
      * Get the deadline status of the task.
      */
     public function getDeadlineStatusAttribute()
     {
+        if ($this->status === 'DONE') {
+            if ($this->due_date && $this->completed_at && $this->completed_at->gt($this->due_date)) {
+                return 'COMPLETED_LATE';
+            }
+
+            return 'COMPLETED';
+        }
+
         if (!$this->due_date) {
             return 'DEADLINE_NOT_ASSIGNED';
         }

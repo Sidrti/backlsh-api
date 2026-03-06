@@ -8,6 +8,7 @@ use App\Http\Controllers\V1\AuthController;
 use App\Http\Controllers\V1\Website\ProjectController;
 use App\Http\Controllers\V1\Website\ProjectMemberController;
 use App\Http\Controllers\V1\Website\TaskController;
+use App\Http\Controllers\V1\Website\ChecklistController;
 use App\Http\Controllers\V1\Website\AttendanceController;
 use App\Http\Controllers\V1\Website\DashboardController;
 use App\Http\Controllers\V1\Website\PaymentController;
@@ -19,6 +20,9 @@ use App\Http\Controllers\V1\Website\UserProcessRatingController;
 use App\Http\Controllers\V1\Website\WebsiteScreenshotController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\V1\Website\ProjectProcessRuleController;
+use App\Http\Controllers\V1\Website\NotificationController;
+use App\Http\Controllers\V1\Website\IssuesController;
 
 
 Route::prefix('v1')->group(function () { 
@@ -114,8 +118,37 @@ Route::prefix('v1')->group(function () {
             Route::get('/tasks/{task}', [TaskController::class, 'show']);
             Route::post('/tasks/{task}', [TaskController::class, 'update']);
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+            Route::post('/tasks/update/bulk', [TaskController::class, 'bulkUpdate']);
+
+            // Checklist Routes
+            Route::get('/tasks/{task}/checklists', [ChecklistController::class, 'index']);
+            Route::post('/tasks/{task}/checklists', [ChecklistController::class, 'store']);
+            Route::get('/checklists/{checklist}', [ChecklistController::class, 'show']);
+            Route::post('/checklists/{checklist}', [ChecklistController::class, 'update']);
+            Route::delete('/checklists/{checklist}', [ChecklistController::class, 'destroy']);
+            Route::post('/tasks/{task}/checklists/generate', [ChecklistController::class, 'generateChecklist']);
 
             Route::get('/project-report', [ProjectReportController::class, 'fetchProjectReport']);
+
+            // Project Process Rules
+            Route::get('/projects/{project_id}/process-rules', [ProjectProcessRuleController::class, 'index']);
+            Route::post('/projects/{project_id}/process-rules', [ProjectProcessRuleController::class, 'store']);
+            Route::post('/process-rules/{id}', [ProjectProcessRuleController::class, 'update']);
+            Route::delete('/process-rules/{id}', [ProjectProcessRuleController::class, 'destroy']);
+
+            // Notifications Routes
+            Route::get('/notifications', [NotificationController::class, 'index']);
+            Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+            Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+            Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+            // Issues Routes
+            Route::get('/projects/{project}/issues', [IssuesController::class, 'indexByProject']);
+            Route::post('/issues', [IssuesController::class, 'store']);
+            Route::get('/issues/{issue}', [IssuesController::class, 'show']);
+            Route::post('/issues/{issue}', [IssuesController::class, 'update']);
+            Route::delete('/issues/{issue}', [IssuesController::class, 'destroy']);
+            Route::post('/issues/update/bulk', [IssuesController::class, 'bulkUpdate']);
 
         });
     });

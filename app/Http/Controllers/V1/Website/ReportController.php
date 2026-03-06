@@ -56,7 +56,6 @@ class ReportController extends Controller
             $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startDate, $endDate, $projectId);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['user_sub_activities' => $userSubActivities]]);
         }
-
         // Existing data
         $process = $this->getProcessDataWithScreenshots($userId, $startDate, $endDate, $projectId);
         $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, 'PRODUCTIVE');

@@ -40,6 +40,16 @@ return [
         'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
         'redirect' => env('LINKEDIN_REDIRECT_URI'),
     ],
+
+    'microsoft_graph' => [
+        'tenant_id' => env('MICROSOFT_TENANT_ID'),
+        'client_id' => env('MICROSOFT_CLIENT_ID'),
+        'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
+    ],
+
+    'microsoft_teams' => [
+        'webhook_url' => env('MICROSOFT_TEAMS_WEBHOOK_URL'),
+    ],
     
 
 ];

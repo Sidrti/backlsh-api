@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Helpers\Helper;
+use App\Helpers\NotificationHelper;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
@@ -161,6 +162,10 @@ class ProjectController extends Controller
         $project->members()->attach($memberIds);
 
         $project->load(['creator', 'members', 'tasks']);
+
+        // Notify members added to the project (excluding the creator)
+        $creator = auth()->user();
+        NotificationHelper::notifyProjectAssignedToMembers($project, $memberIds, $creator);
 
         return response()->json([
             'status_code' => 1,
