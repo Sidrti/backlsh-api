@@ -129,6 +129,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/tasks/{task}/checklists/generate', [ChecklistController::class, 'generateChecklist']);
 
             Route::get('/project-report', [ProjectReportController::class, 'fetchProjectReport']);
+            Route::get('/project-activity-trend', [ProjectReportController::class, 'fetchActivityTrend']);
 
             // Project Process Rules
             Route::get('/projects/{project_id}/process-rules', [ProjectProcessRuleController::class, 'index']);

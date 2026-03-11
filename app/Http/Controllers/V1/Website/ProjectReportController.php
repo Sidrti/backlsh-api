@@ -6,6 +6,7 @@ use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\Issue;
 use App\Models\User;
 use App\Models\UserActivity;
 use App\Models\UserSubActivity;
@@ -87,6 +88,105 @@ class ProjectReportController extends Controller
         ]);
     }
 
+    public function fetchActivityTrend(Request $request)
+    {
+        $request->validate([
+            'project_id' => 'required|exists:projects,id',
+        ]);
+        $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+
+        $projectId = $request->input('project_id');
+
+        // Verify user has access to this project
+        $userId = auth()->user()->id;
+        $project = Project::where('id', $projectId)
+            ->where(function ($query) use ($userId) {
+                $query->where('created_by', $userId)
+                    ->orWhereHas('members', function ($q) use ($userId) {
+                        $q->where('user_id', $userId);
+                    });
+            })
+            ->firstOrFail();
+
+        // 1. New Tasks
+        $newTasksCount = Task::where('project_id', $projectId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->count();
+
+        // 2. Issues Reported
+        $issuesReportedCount = Issue::where('project_id', $projectId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->count();
+
+        // 3. Resolution Rate
+        $issuesResolvedCount = Issue::where('project_id', $projectId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->where('status', 'DONE')
+            ->count();
+
+        $resolutionRate = $issuesReportedCount > 0
+            ? round(($issuesResolvedCount / $issuesReportedCount) * 100, 2)
+            : 0;
+
+        // Activity Trend Data
+        $tasksByDate = Task::where('project_id', $projectId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $issuesByDate = Issue::where('project_id', $projectId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $dates = [];
+        $tasksAddedSeries = [];
+        $issuesAddedSeries = [];
+
+        $currentDate = Carbon::parse($startDate);
+        $endDateObj = Carbon::parse($endDate);
+
+        while ($currentDate->lte($endDateObj)) {
+            $dateString = $currentDate->format('Y-m-d');
+            $dates[] = $currentDate->format('M j');
+
+            $tasksAddedSeries[] = isset($tasksByDate[$dateString]) ? $tasksByDate[$dateString]->count : 0;
+            $issuesAddedSeries[] = isset($issuesByDate[$dateString]) ? $issuesByDate[$dateString]->count : 0;
+
+            $currentDate->addDay();
+        }
+
+        $activityTrend = [
+            'categories' => $dates,
+            'series' => [
+                [
+                    'name' => 'Tasks Added',
+                    'data' => $tasksAddedSeries
+                ],
+                [
+                    'name' => 'Issues Added',
+                    'data' => $issuesAddedSeries
+                ]
+            ]
+        ];
+
+        return response()->json([
+            'status_code' => 1,
+            'data' => [
+                'new_tasks_count' => $newTasksCount,
+                'issues_reported_count' => $issuesReportedCount,
+                'resolution_rate' => $resolutionRate,
+                'activity_trend' => $activityTrend,
+            ],
+            'message' => 'Activity trend fetched successfully',
+        ]);
+    }
+
     private function getTotalProjectTime1($projectId, $startDate, $endDate)
     {
         $totalSeconds = UserActivity::where('project_id', $projectId)
@@ -149,8 +249,8 @@ class ProjectReportController extends Controller
             ->get();
 
         return $members->map(function ($member) use ($totalTimeInvested) {
-            $percentage = $totalTimeInvested['seconds'] > 0 
-                ? round(($member->total_seconds / $totalTimeInvested['seconds']) * 100, 2) 
+            $percentage = $totalTimeInvested['seconds'] > 0
+                ? round(($member->total_seconds / $totalTimeInvested['seconds']) * 100, 2)
                 : 0;
 
             return [

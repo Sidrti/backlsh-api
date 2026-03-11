@@ -25,30 +25,40 @@ class IssuesController extends Controller
             ], 403);
         }
 
-        $query = $project->issues()->with(['reporter', 'assignee', 'task']);
-
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
-        }
+        $baseQuery = $project->issues();
 
         if ($request->has('severity') && $request->severity) {
-            $query->where('severity', $request->severity);
+            $baseQuery->where('severity', $request->severity);
         }
 
         if ($request->has('type') && $request->type) {
-            $query->where('type', $request->type);
+            $baseQuery->where('type', $request->type);
         }
 
         if ($request->has('assigned_to') && $request->assigned_to) {
-            $query->where('assigned_to', $request->assigned_to);
+            $baseQuery->where('assigned_to', $request->assigned_to);
+        }
+
+        if ($request->has('task_id') && $request->task_id) {
+            $baseQuery->where('task_id', $request->task_id);
         }
 
         if ($request->has('search') && $request->search) {
             $searchTerm = $request->search;
-            $query->where(function ($q) use ($searchTerm) {
+            $baseQuery->where(function ($q) use ($searchTerm) {
                 $q->where('title', 'like', '%' . $searchTerm . '%')
                   ->orWhere('description', 'like', '%' . $searchTerm . '%');
             });
+        }
+
+        $totalIssues = (clone $baseQuery)->count();
+        $todoIssues = (clone $baseQuery)->where('status', 'TODO')->count();
+        $inProgressIssues = (clone $baseQuery)->where('status', 'IN_PROGRESS')->count();
+
+        $query = (clone $baseQuery)->with(['reporter', 'assignee', 'task']);
+
+        if ($request->has('status') && $request->status) {
+            $query->where('status', $request->status);
         }
 
         $perPage = $request->input('per_page', 10);
@@ -56,7 +66,12 @@ class IssuesController extends Controller
 
         return response()->json([
             'status_code' => 1,
-            'data' => $issues->items(),
+            'data' => [
+                'issues' => $issues->items(),
+                'total_issues' => $totalIssues,
+                'todo_issues' => $todoIssues,
+                'inprogress_issues' => $inProgressIssues,
+            ],
             'pagination' => [
                 'current_page' => $issues->currentPage(),
                 'last_page' => $issues->lastPage(),

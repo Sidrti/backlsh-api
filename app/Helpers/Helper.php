@@ -23,6 +23,7 @@ use Stripe\Price;
 use Stripe\Stripe;
 use Stripe\Subscription;
 use Intervention\Image\Facades\Image;
+use ImageKit\ImageKit;
 
 class Helper
 {
