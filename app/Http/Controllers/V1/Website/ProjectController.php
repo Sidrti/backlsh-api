@@ -188,12 +188,13 @@ class ProjectController extends Controller
             ], 403);
         }
 
-        $project->load(['creator', 'members', 'tasks.assignee']);
+        $project->load(['creator', 'members']);
 
         $totalTimeTracked = Helper::calculateTotalProjectTime($project->id);
         $project->total_time_spent = Helper::convertSecondsInReadableFormat($totalTimeTracked);
         $project->loadCount([
             'tasks',
+            'issues',
             'members',
             'tasks as todo_tasks_count' => function ($query) {
                 $query->where('status', 'TODO');

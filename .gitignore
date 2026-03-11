@@ -2,6 +2,8 @@
 /public/build
 /public/hot
 /public/storage
+/storage/app/public/uploads/*
+!/storage/app/public/uploads/.gitkeep
 /storage/*.key
 /vendor
 .env

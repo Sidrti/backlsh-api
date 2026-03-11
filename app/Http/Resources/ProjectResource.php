@@ -34,6 +34,7 @@ class ProjectResource extends JsonResource
             'members' => UserResource::collection($this->whenLoaded('members')),
             'tasks' => TaskResource::collection($this->whenLoaded('tasks')),
             'tasks_count' => $this->when(isset($this->tasks_count), $this->tasks_count),
+            'issues_count' => $this->when(isset($this->issues_count), $this->issues_count),
             'tasks_completed_count' => $this->when(isset($this->tasks_completed_count), $this->tasks_completed_count),
             'members_count' => $this->when(isset($this->members_count), $this->members_count),
             'todo_tasks_count' => $this->when(isset($this->todo_tasks_count), $this->todo_tasks_count),

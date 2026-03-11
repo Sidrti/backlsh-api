@@ -33,4 +33,9 @@ jobs:
           port: 22
           source: .
           target: /home/backlsh.com/api.backlsh.com
+          rm: false # Ensure this is false so it doesn't delete existing files
+          exclude: |
+            storage/app/public/uploads/*
+            .git
+            .github
 
