@@ -29,7 +29,7 @@ class UserActivityController extends Controller
     //     $neutralSeconds = 0;
     //     $productiveSeconds = 0;
     //     $nonproductiveSeconds = 0;
-        
+
     //     $userId = auth()->user()->id;
     //     $processedActivityData = $this->getActivityStartEndTime($inputData);
     //     $userProjectRules = $this->getUserProjectRules($userId);
@@ -40,7 +40,7 @@ class UserActivityController extends Controller
     //     foreach ($processedActivityData as $activity) {
     //         // FIX: Consistently normalize process name immediately
     //         $processRawName = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
-            
+
     //         $process = Process::firstOrCreate([
     //             'process_name' => $processRawName,
     //             'type' => $activity['type'],
@@ -169,7 +169,7 @@ class UserActivityController extends Controller
             foreach ($processedActivityData as $activity) {
                 // 1. Normalize and find/create the Main Process
                 $processRawName = strtolower(trim(pathinfo($activity['process'], PATHINFO_FILENAME)));
-                
+
                 $process = Process::firstOrCreate([
                     'process_name' => $processRawName,
                     'type' => $activity['type'],
@@ -265,7 +265,7 @@ class UserActivityController extends Controller
     }
 
     /**
-     * Fixes the 5h vs 7h discrepancy by calculating totals directly from 
+     * Fixes the 5h vs 7h discrepancy by calculating totals directly from
      * the raw UserActivity logs instead of manual PHP increments.
      */
     private function syncProductivitySummary($userId, $date, $excludedApps)
@@ -355,7 +355,7 @@ class UserActivityController extends Controller
                 $processName = strtolower(trim(pathinfo($processName, PATHINFO_FILENAME)));
                 $preTimestamp = $data['DateTime'];
                 $dateTime = new DateTime($preTimestamp);
-                $timestamp = $dateTime->format('Y-m-d H:i:s');
+                $timestamp = Carbon::parse($preTimestamp)->utc()->format('Y-m-d H:i:s');
                 $url = Helper::getDomainFromUrl($data['Url']);
                 $processType = Helper::computeType($processName);
 
@@ -392,7 +392,7 @@ class UserActivityController extends Controller
 
                     // Work with the current subprocess data from processedData
                     $currentSubProcessData = &$processedData[$processName]['subProcess'];
-                
+
                     $subProcessDataLen = count($currentSubProcessData) - 1;
 
                     if ($subProcessDataLen >= 0) {
@@ -507,7 +507,7 @@ class UserActivityController extends Controller
 
 /**
  * Determine the project_id based on process rules
- * 
+ *
  * @param string $processName The process or URL to match
  * @param int|null $userSelectedProjectId The project_id selected by user
  * @param Collection $rules Collection of project rules
@@ -525,7 +525,7 @@ private function determineProjectId($processName, $userSelectedProjectId, $rules
 
     // No priority rule found, check for non-priority rules
     $nonPriorityRule = $this->findMatchingRule($processName, $rules->where('priority', false));
-    
+
     if ($nonPriorityRule) {
         // Non-priority rule found, but user selection takes precedence
         if ($userSelectedProjectId !== null) {
@@ -540,7 +540,7 @@ private function determineProjectId($processName, $userSelectedProjectId, $rules
 
 /**
  * Find a matching rule based on match_type
- * 
+ *
  * @param string $processName
  * @param Collection $rules
  * @return object|null
@@ -549,16 +549,16 @@ private function findMatchingRule($processName, $rules)
 {
     foreach ($rules as $rule) {
         $matched = false;
-        
+
         switch ($rule->match_type) {
             case 'exact':
                 $matched = strtolower($processName) === strtolower($rule->process);
                 break;
-                
+
             case 'contains':
                 $matched = stripos($processName, $rule->process) !== false;
                 break;
-                
+
             case 'domain':
                 // Extract domain from URL for domain matching
                 $processDomain = Helper::getDomainFromUrl($processName);
@@ -566,18 +566,18 @@ private function findMatchingRule($processName, $rules)
                 $matched = $processDomain === $ruleDomain;
                 break;
         }
-        
+
         if ($matched) {
             return $rule;
         }
     }
-    
+
     return null;
 }
 
 /**
  * Extract domain from URL
- * 
+ *
  * @param string $url
  * @return string
  */
@@ -587,16 +587,16 @@ private function findMatchingRule($processName, $rules)
 //     if (!preg_match("~^(?:f|ht)tps?://~i", $url)) {
 //         $url = "http://" . $url;
 //     }
-    
+
 //     $host = parse_url($url, PHP_URL_HOST);
-    
+
 //     if (!$host) {
 //         return strtolower($url);
 //     }
-    
+
 //     // Remove www. prefix
 //     $domain = preg_replace('/^www\./', '', $host);
-    
+
 //     return strtolower($domain);
 // }
 }

@@ -31,15 +31,6 @@ class WebsiteScreenshotController extends Controller
          if($request->input('user_id') == 0) {
             return response()->json(config('dummy.screenshots'));
         }
-        // $teamUserIds = User::where('parent_user_id', $userId)
-        //     ->orWhere('id', $userId)
-        //     ->pluck('id');
-        // if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
-        //     $dummyData = Cache::remember('dummy_screenshots', 3600, function () {
-        //     return config('dummy.screenshots');
-        // });
-        //  return response()->json($dummyData);
-        // }
 
         $timezoneOffset = $request->input('timezone_offset_minutes'); // In minutes
         $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subDays(7)))
