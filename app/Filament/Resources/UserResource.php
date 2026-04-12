@@ -44,29 +44,48 @@ class UserResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('id')->sortable(),
-                TextColumn::make('name')->sortable()->searchable(),
+                TextColumn::make('name')->sortable()->searchable()
+                    ->url(fn (User $record): string => static::getUrl('index', ['parent_user_id' => $record->id])),
                 TextColumn::make('email')->sortable()->searchable(),
+                TextColumn::make('sub_users_count')->label('Users Count')->counts('subUsers'),
+                TextColumn::make('latestActivity.start_datetime')
+                    ->label('Last Activity')
+                    ->dateTime()
+                    ->sortable(),
                 TextColumn::make('created_at')->dateTime(),
-                TextColumn::make('updated_at')->dateTime(),
             ])
             ->filters([
                 //
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('sub_users')
+                    ->label('View Sub Users')
+                    ->icon('heroicon-o-users')
+                    ->url(fn (User $record): string => static::getUrl('index', ['parent_user_id' => $record->id])),
             ])
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make(),
             ]);
     }
-    
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->when(
+                request()->query('parent_user_id'),
+                fn ($query, $parentId) => $query->where('parent_user_id', $parentId),
+                fn ($query) => $query->where('parent_user_id', 0)
+            );
+    }
+
     public static function getRelations(): array
     {
         return [
             //
         ];
     }
-    
+
     public static function getPages(): array
     {
         return [
@@ -74,5 +93,5 @@ class UserResource extends Resource
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
-    }    
+    }
 }

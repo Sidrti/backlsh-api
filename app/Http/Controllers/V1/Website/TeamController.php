@@ -48,7 +48,7 @@ class TeamController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $reader = Reader::createFromPath($file->getPathname(), 'r');
-            $reader->setHeaderOffset(0); 
+            $reader->setHeaderOffset(0);
 
             $memberNotInvitedCount = 0;
             $memberInvitedCount = 0;
@@ -63,7 +63,7 @@ class TeamController extends Controller
                         $memberInvitedCount++;
                     }
                     else {
-                      $memberDuplicateCount++;  
+                      $memberDuplicateCount++;
                     }
                  }
                  else {
@@ -82,7 +82,7 @@ class TeamController extends Controller
         $currentDate = Carbon::now();
         $userId = auth()->user()->id;
         $tenDaysAgo = $currentDate->copy()->subDays(10)->toDateString();
-    
+
         // Fetch team members along with their activity status
         $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode')
             ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
@@ -104,18 +104,18 @@ class TeamController extends Controller
         $totalMembersCount = $teamMembers->count();
         $activeMemberCount = 0;
         $inActiveMemberCount = 0;
-        
+
         foreach($teamMembers as $item) {
             $item->activity_status == 'ACTIVE' ? $activeMemberCount++ : $inActiveMemberCount++;
         }
-    
+
         return response()->json([
             'status_code' => 1,
             'data' => ['team' => $teamMembers,'total_member_count' => $totalMembersCount,'active_member_count' => $activeMemberCount,'inactive_member_count' =>$inActiveMemberCount ],
             'message' => 'Team members fetched',
         ]);
     }
-    
+
     public function fetchSampleCsvUrl()
     {
         $filePath = storage_path('app/public/uploads/default/sample.csv');
@@ -136,7 +136,7 @@ class TeamController extends Controller
         if($user->parent_user_id == auth()->user()->id || $user->id == auth()->user()->id) {
             $user->stealth_mode = $request->input('stealth_mode');
             $user->save();
-    
+
             return response()->json(['status_code'=> 1,'message' => 'Stealth mode updated successfully.'], 200);
         }
         return response()->json(['status_code'=> 2,'message' => 'Stealth mode not updated'], 200);
@@ -158,7 +158,7 @@ class TeamController extends Controller
         $body = view('email.member_onboarding_email', $data)->render();
         $subject = auth()->user()->name .' has added you to their team';
         Helper::sendEmail($email, $subject, $body, $name);
-       
+
         return response()->json([
             'status_code' => 1,
             'message' => 'Onboarding email has been sent to ' . $name,
