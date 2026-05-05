@@ -44,6 +44,7 @@ return [
                 ["day" => "Sat", "date" => "06-09-2025", "productivity_percent" => 30, "productive_time" => "2h 6m", "nonproductive_time" => "12m", "neutral_time" => "2h 54m", "total_time" => "5h 12m"],
                 ["day" => "Sun", "date" => "07-09-2025", "productivity_percent" => 10, "productive_time" => "1h 12m", "nonproductive_time" => "0s", "neutral_time" => "2h 6m", "total_time" => "3h 18m"]
             ],
+            "week_productivity_ui_action" => "NO_BUTTON",
             "active_project_list" => [
                 [
                     "project_id" => 5,
@@ -93,9 +94,86 @@ return [
                     "start_date" => "18-11-2025",
                     "end_date" => "28-12-2025"
                 ],
-            ]
+            ],
+            "top_employees_monthly_trend" => [
+                [
+                    "user_id" => 1,
+                    "name" => "Alice Demo",
+                    "monthly_data" => [
+                        ["month" => "Dec 2025", "total_time_seconds" => 135000, "total_time_human" => "37h 30m", "productive_seconds" => 95000, "productive_time_human" => "26h 23m"],
+                        ["month" => "Jan 2026", "total_time_seconds" => 144000, "total_time_human" => "40h", "productive_seconds" => 108000, "productive_time_human" => "30h"],
+                        ["month" => "Feb 2026", "total_time_seconds" => 151200, "total_time_human" => "42h", "productive_seconds" => 115200, "productive_time_human" => "32h"],
+                        ["month" => "Mar 2026", "total_time_seconds" => 160000, "total_time_human" => "44h 26m", "productive_seconds" => 125000, "productive_time_human" => "34h 43m"],
+                        ["month" => "Apr 2026", "total_time_seconds" => 140000, "total_time_human" => "38h 53m", "productive_seconds" => 105000, "productive_time_human" => "29h 10m"],
+                        ["month" => "May 2026", "total_time_seconds" => 54000, "total_time_human" => "15h", "productive_seconds" => 36000, "productive_time_human" => "10h"],
+                    ]
+                ],
+                [
+                    "user_id" => 2,
+                    "name" => "Bob Demo",
+                    "monthly_data" => [
+                        ["month" => "Dec 2025", "total_time_seconds" => 125000, "total_time_human" => "34h 43m", "productive_seconds" => 85000, "productive_time_human" => "23h 36m"],
+                        ["month" => "Jan 2026", "total_time_seconds" => 126000, "total_time_human" => "35h", "productive_seconds" => 90000, "productive_time_human" => "25h"],
+                        ["month" => "Feb 2026", "total_time_seconds" => 133200, "total_time_human" => "37h", "productive_seconds" => 97200, "productive_time_human" => "27h"],
+                        ["month" => "Mar 2026", "total_time_seconds" => 140000, "total_time_human" => "38h 53m", "productive_seconds" => 100000, "productive_time_human" => "27h 46m"],
+                        ["month" => "Apr 2026", "total_time_seconds" => 130000, "total_time_human" => "36h 6m", "productive_seconds" => 95000, "productive_time_human" => "26h 23m"],
+                        ["month" => "May 2026", "total_time_seconds" => 46800, "total_time_human" => "13h", "productive_seconds" => 28800, "productive_time_human" => "8h"],
+                    ]
+                ]
+            ],
+            "projects_overdue" => 2
         ],
 
+    ],
+    "user_dashboard" => [
+        "dummy" => "true",
+        "status_code" => 1,
+        "data" => [
+            "total_time_worked" => "38h 15m",
+            "total_productive_hours" => "25h 30m",
+            "total_non_productive_hours" => "2h 45m",
+            "total_neutral_hours" => "10h",
+            "user_working_trend" => [
+                ["date" => "01-09-2025", "productive" => 5.5, "productive_tooltip" => "5h 30m", "nonproductive" => 0.5, "nonproductive_tooltip" => "30m", "neutral" => 2.0, "neutral_tooltip" => "2h"],
+                ["date" => "02-09-2025", "productive" => 6.0, "productive_tooltip" => "6h", "nonproductive" => 0.2, "nonproductive_tooltip" => "12m", "neutral" => 1.8, "neutral_tooltip" => "1h 48m"],
+                ["date" => "03-09-2025", "productive" => 4.5, "productive_tooltip" => "4h 30m", "nonproductive" => 0.8, "nonproductive_tooltip" => "48m", "neutral" => 2.7, "neutral_tooltip" => "2h 42m"],
+                ["date" => "04-09-2025", "productive" => 5.2, "productive_tooltip" => "5h 12m", "nonproductive" => 0.3, "nonproductive_tooltip" => "18m", "neutral" => 2.5, "neutral_tooltip" => "2h 30m"],
+                ["date" => "05-09-2025", "productive" => 4.3, "productive_tooltip" => "4h 18m", "nonproductive" => 0.6, "nonproductive_tooltip" => "36m", "neutral" => 1.0, "neutral_tooltip" => "1h"],
+            ],
+            "month_user_attendance" => [
+                "days_present" => 18,
+                "total_days" => 22
+            ],
+            "month_user_rank" => 4,
+            "user_peek_hours" => ["10 AM - 11 AM", "2 PM - 3 PM"],
+            "week_productivity_percent" => [
+                ["day" => "Mon", "date" => "01-09-2025", "productivity_percent" => 75, "productive_time" => "5h 30m", "nonproductive_time" => "30m", "neutral_time" => "2h", "total_time" => "8h"],
+                ["day" => "Tue", "date" => "02-09-2025", "productivity_percent" => 80, "productive_time" => "6h", "nonproductive_time" => "12m", "neutral_time" => "1h 48m", "total_time" => "8h"],
+                ["day" => "Wed", "date" => "03-09-2025", "productivity_percent" => 60, "productive_time" => "4h 30m", "nonproductive_time" => "48m", "neutral_time" => "2h 42m", "total_time" => "8h"],
+                ["day" => "Thu", "date" => "04-09-2025", "productivity_percent" => 65, "productive_time" => "5h 12m", "nonproductive_time" => "18m", "neutral_time" => "2h 30m", "total_time" => "8h"],
+                ["day" => "Fri", "date" => "05-09-2025", "productivity_percent" => 85, "productive_time" => "4h 18m", "nonproductive_time" => "36m", "neutral_time" => "1h", "total_time" => "5h 54m"],
+            ],
+            "week_productivity_ui_action" => "NO_BUTTON",
+            "active_project_list" => [
+                [
+                    "project_id" => 5,
+                    "project_name" => "E-Commerce Platform Upgrade",
+                    "status" => "ACTIVE",
+                    "time_spent" => "9h 32m",
+                    "time_spent_seconds" => "34320",
+                    "total_time_tracked" => "9h 32m",
+                    "total_time_tracked_seconds" => "34320",
+                    "task_done" => 4,
+                    "task_assigned" => 18,
+                    "time_progress_percentage" => 31,
+                    "percentage_of_total_time" => 27,
+                    "progress_percentage" => 22,
+                    "start_date" => "22-11-2025",
+                    "end_date" => "18-12-2025"
+                ],
+            ],
+            "project_overdue" => 2
+        ]
     ],
 
 
@@ -1067,6 +1145,7 @@ return [
             "email" => "alex@mail.com",
             "profile_picture" => "https://api.dicebear.com/7.x/avataaars/svg?seed=85794394",
             "stealth_mode" => 0,
-            "activity_status" => "ACTIVE"
+            "activity_status" => "ACTIVE",
+            "role" => "MEMBER"
         ]],
 ];

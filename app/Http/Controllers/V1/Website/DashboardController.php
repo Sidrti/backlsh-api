@@ -30,7 +30,7 @@ class DashboardController extends Controller
         $teamUserIds = User::where('parent_user_id', $userId)
             ->orWhere('id', $userId)
             ->pluck('id');
-            
+
         $topMemberRequestOnly = $request->input('top_member_req_only', false);
         $topProcessRequestOnly = $request->input('top_process_req_only', false);
         $todayUserAttendanceRequestOnly = $request->input('user_attendance_req_only', false);
@@ -43,7 +43,7 @@ class DashboardController extends Controller
             $topMembers = $this->getTopMostProductiveMembers($userId, $request->input('top_member_days', 1));
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_members' => $topMembers]]);
         }
-        
+
         if ($topProcessRequestOnly) {
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
                 return response()->json(config('dummy.top_processes'));
@@ -52,20 +52,14 @@ class DashboardController extends Controller
             $topWebsites = Helper::getTopWebsites($request->input('top_process_days', 7), $teamUserIds);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_processes' => ['apps' => $topProcesses, 'websites' => $topWebsites]]]);
         }
-        
+
         if ($todayUserAttendanceRequestOnly) {
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
                 return response()->json(config('dummy.attendance'));
             }
-            $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds);
+            $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds, $request->input('timezone_offset_minutes', 0));
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['todays_users_attendance_list' => $todaysUsersAttendanceList]]);
         }
-
-        // NEW: Handle active projects request only
-        // if ($activeProjectsRequestOnly) {
-        //     $activeProjectsList = Helper::getActiveProjectsForTeam($teamUserIds, $startDate, $endDate);
-        //     return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['active_projects_list' => $activeProjectsList]]);
-        // }
 
         $totalHoursWorked = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate);
         $totalProductiveHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'PRODUCTIVE');
@@ -78,17 +72,18 @@ class DashboardController extends Controller
         $todayTeamAttendance = $this->getTeamAttendanceToday($teamUserIds);
         $topMembers = $this->getTopMostProductiveMembers($userId, 1);
 
-        $totalMembersInTeam = count($teamUserIds); 
+        $totalMembersInTeam = count($teamUserIds);
         $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
         $activeProjectsList = Helper::getActiveProjectsForTeam($teamUserIds, $startDate, $endDate);
         $projectOverdue = Helper::getProjectCountByStatus($userId,'OVERDUE',$teamUserIds);
+        $topEmployeesMonthlyTrend = $this->getTopEmployeesMonthlyTrend($teamUserIds);
 
         if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
             return response()->json(config('dummy.dashboard'));
         }
 
         $data =  [
-            'dummy'=> false, 
+            'dummy'=> false,
             'total_time_worked' => $totalHoursWorked,
             'total_productive_hours' => $totalProductiveHours,
             'total_non_productive_hours' => $totalNonProductiveHours,
@@ -101,7 +96,8 @@ class DashboardController extends Controller
             'week_productivity_percent' => $weekProductivityReport['days'],
             'week_productivity_ui_action' => $weekProductivityReport['ui_action'],
             'active_project_list' => $activeProjectsList,
-            'projects_overdue' => $projectOverdue
+            'projects_overdue' => $projectOverdue,
+            'top_employees_monthly_trend' => $topEmployeesMonthlyTrend
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -142,6 +138,10 @@ class DashboardController extends Controller
             'active_project_list' => $activeProjectList,
             'project_overdue' => $projectOverdue
         ];
+        if(!Helper::hasUsedBacklsh($teamUserIds)){
+            return response()->json(config('dummy.user_dashboard'));
+        }
+
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
  private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
@@ -204,9 +204,20 @@ class DashboardController extends Controller
 
         return $onlineMembersCount;
     }
-    private function getUsersAttendanceToday($teamUserIds)
+    private function getUsersAttendanceToday($teamUserIds, $timezoneOffsetMinutes = 0)
     {
-        $today = Carbon::today()->format('Y-m-d');
+        // Calculate timezone string from offset (e.g. +05:30)
+        $hours = floor(abs($timezoneOffsetMinutes) / 60);
+        $minutes = abs($timezoneOffsetMinutes) % 60;
+        $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
+        $tz = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
+
+        // 🔥 Calculate "Today" in USER LOCAL TIME
+        $today = Carbon::now($tz)->toDateString();
+
+        // 🔥 Determine UTC boundaries for this local day to find the first login correctly
+        $startUTC = Carbon::parse($today, $tz)->startOfDay()->setTimezone('UTC');
+        $endUTC =   Carbon::parse($today, $tz)->endOfDay()->setTimezone('UTC');
 
         $attendance = User::select(
                 'users.id',
@@ -216,13 +227,13 @@ class DashboardController extends Controller
                 DB::raw('MIN(user_activities.start_datetime) as login_time'),
                 'ups.total_seconds'
             )
-            ->leftJoin('user_activities', function ($join) use ($today) {
+            ->leftJoin('user_activities', function ($join) use ($startUTC, $endUTC) {
                 $join->on('users.id', '=', 'user_activities.user_id')
-                    ->whereDate('user_activities.start_datetime', '=', $today);
+                    ->whereBetween('user_activities.start_datetime', [$startUTC, $endUTC]);
             })
             ->leftJoin('user_productivity_summaries as ups', function ($join) use ($today) {
                 $join->on('users.id', '=', 'ups.user_id')
-                    ->whereDate('ups.date', '=', $today);
+                    ->where('ups.date', '=', $today);
             })
             ->whereIn('users.id', $teamUserIds)
             ->groupBy(
@@ -234,13 +245,101 @@ class DashboardController extends Controller
             )
             ->orderBy('login_time', 'desc')
             ->get()
-            ->map(function ($user) {
+            ->map(function ($user) use ($tz) {
                 $user->total_hours_human = Helper::convertSecondsInReadableFormat($user->total_seconds ?? 0);
                 $user->attendance_status = ($user->total_seconds ?? 0) > 0 ? 'Present' : 'Absent';
+                
+                // Use the exact User model logic for profile picture
+                $user->profile_picture = (new User(['profile_picture' => $user->profile_picture]))->profile_picture;
+
+                if ($user->login_time) {
+                    $user->login_time = Carbon::parse($user->login_time, 'UTC')->setTimezone($tz)->toIso8601String();
+                }
+                
                 return $user;
             });
 
         return $attendance;
+    }
+
+    private function getTopEmployeesMonthlyTrend($teamUserIds)
+    {
+        $startDate = Carbon::now()->subMonths(5)->startOfMonth();
+        $endDate = Carbon::now()->endOfMonth();
+
+        $topMembers = DB::table('user_productivity_summaries')
+            ->select('user_id', DB::raw('SUM(total_seconds) as total_time'))
+            ->whereIn('user_id', $teamUserIds)
+            ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->groupBy('user_id')
+            ->orderByDesc('total_time')
+            ->limit(10)
+            ->pluck('user_id')
+            ->toArray();
+
+        if (empty($topMembers)) {
+            return [];
+        }
+
+        $monthlySummaries = DB::table('user_productivity_summaries')
+            ->join('users', 'users.id', '=', 'user_productivity_summaries.user_id')
+            ->select(
+                'user_id',
+                'users.name',
+                DB::raw('DATE_FORMAT(date, "%Y-%m") as month'),
+                DB::raw('SUM(total_seconds) as total_time_seconds'),
+                DB::raw('SUM(productive_seconds) as productive_seconds')
+            )
+            ->whereIn('user_id', $topMembers)
+            ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->groupBy('user_id', 'users.name', 'month')
+            ->orderBy('total_time_seconds','desc')
+            ->get();
+
+        $result = [];
+        $groupedByUser = $monthlySummaries->groupBy('user_id');
+
+        foreach ($topMembers as $topUserId) {
+            $userData = $groupedByUser->get($topUserId);
+            if (!$userData) continue;
+
+            $userName = $userData->first()->name;
+            $userTrend = [
+                'user_id' => $topUserId,
+                'name' => $userName,
+                'monthly_data' => []
+            ];
+
+            // Initialize all 6 months with 0
+            for ($i = 5; $i >= 0; $i--) {
+                $monthCarbon = Carbon::now()->subMonths($i);
+                $monthStr = $monthCarbon->format('Y-m');
+                $userTrend['monthly_data'][$monthStr] = [
+                    'month' => $monthCarbon->format('M Y'),
+                    'total_time_seconds' => 0,
+                    'total_time_human' => '0m',
+                    'productive_seconds' => 0,
+                    'productive_time_human' => '0m'
+                ];
+            }
+
+            // Fill actual data
+            foreach ($userData as $data) {
+                $monthStr = $data->month; // e.g., 2026-03
+                if (isset($userTrend['monthly_data'][$monthStr])) {
+                    $userTrend['monthly_data'][$monthStr]['total_time_seconds'] = (int)$data->total_time_seconds;
+                    $userTrend['monthly_data'][$monthStr]['total_time_human'] = Helper::convertSecondsInReadableFormat($data->total_time_seconds);
+                    $userTrend['monthly_data'][$monthStr]['productive_seconds'] = (int)$data->productive_seconds;
+                    $userTrend['monthly_data'][$monthStr]['productive_time_human'] = Helper::convertSecondsInReadableFormat($data->productive_seconds);
+                }
+            }
+
+            // Convert assoc array to indexed array
+            $userTrend['monthly_data'] = array_values($userTrend['monthly_data']);
+            $result[] = $userTrend;
+        }
+
+        return $result;
     }
     // private function getTopMostProductiveMembers($userId, $days = 1)
     // {
@@ -279,7 +378,7 @@ class DashboardController extends Controller
     //         $member->productive_time = Helper::convertSecondsInReadableFormat($member->productive_time);
     //         $member->total_time = Helper::convertSecondsInReadableFormat($member->total_time);
     //         return $member;
-    //     }); 
+    //     });
     //     return $topMembers;
     //     // return [
     //     //     'period' => $days === 1 ? 'Today' : "Last {$days} Days",
@@ -292,7 +391,7 @@ private function getTopMostProductiveMembers($userId, $days = 1)
 {
     $endDate = Carbon::today();
     $startDate = Carbon::today()->subDays($days - 1);
-    
+
     // 1. Calculate the number of "Workable" days in the range
     // If you want to include Sundays, we just use the raw $days.
     // If you want to EXCLUDE Sundays from the penalty, we count only non-Sundays.
@@ -306,12 +405,12 @@ private function getTopMostProductiveMembers($userId, $days = 1)
         }
         $tempDate->addDay();
     }
-    
+
     // Ensure we don't divide by zero if only a Sunday was selected
-    $workableDays = $workableDays ?: 1; 
+    $workableDays = $workableDays ?: 1;
 
     // 8 hours per workable day
-    $standardWorkSeconds = $workableDays * 28800; 
+    $standardWorkSeconds = $workableDays * 28800;
 
     $topMembers = DB::table('user_productivity_summaries')
         ->select(
@@ -325,7 +424,7 @@ private function getTopMostProductiveMembers($userId, $days = 1)
             // We calculate how much of a "Full Productive Week" they achieved
             DB::raw("
                 ROUND(
-                    (SUM(productive_seconds) / $standardWorkSeconds) * 100, 
+                    (SUM(productive_seconds) / $standardWorkSeconds) * 100,
                 2) as value_score
             ")
         )
@@ -336,7 +435,7 @@ private function getTopMostProductiveMembers($userId, $days = 1)
                 ->orWhere('users.id', $userId);
         })
         ->groupBy('user_id', 'users.name', 'users.email', 'profile_picture')
-        ->havingRaw('SUM(total_seconds) >= 3600') 
+        ->havingRaw('SUM(total_seconds) >= 3600')
         ->orderByDesc('value_score')
         ->limit(5)
         ->get();
@@ -346,11 +445,14 @@ private function getTopMostProductiveMembers($userId, $days = 1)
         $member->productive_time = Helper::convertSecondsInReadableFormat($member->total_productive_seconds);
         $member->total_time = Helper::convertSecondsInReadableFormat($member->total_logged_seconds);
         
+        // Use the exact User model logic for profile picture
+        $member->profile_picture = (new User(['profile_picture' => $member->profile_picture]))->profile_picture;
+
         // Updated Label Logic
         $member->status = $this->getValueLabel($member->value_score);
         
         return $member;
-    }); 
+    });
 
     return $topMembers;
 }
@@ -617,24 +719,24 @@ private function getTopMostProductiveMembers($userId, $days = 1)
         $productivePercent = $metrics->productive_percent ?? 'N/A';
         $totalSeconds = $metrics->total_seconds ?? 0;
         $readableTotal = Helper::convertSecondsInReadableFormat($totalSeconds);
-        
+
         $blockers = $analysisData['productivity_blockers'] ?? collect();
         $blockerNames = $blockers->pluck('process_name')->implode(', ') ?: 'No data available';
-        
+
         $focusPatterns = $analysisData['focus_patterns'] ?? [];
         $longestFocus = !empty($focusPatterns[0]) ? $focusPatterns[0] : null;
         $focusDuration = $longestFocus->duration_minutes ?? 'N/A';
         $focusProcess = $longestFocus->process_name ?? 'N/A';
         return <<<EOT
-            You are a productivity expert analyzing team work patterns from time tracking data. 
-            
+            You are a productivity expert analyzing team work patterns from time tracking data.
+
             IMPORTANT: Format your response in clean HTML with proper structure:
             - Use <h3> tags for main section headers
             - Use <ul> and <li> tags for lists
             - Use <p> tags for paragraphs
             - Use <strong> tags for emphasis
             - Do NOT use markdown syntax (**, -, #, etc.)
-            
+
             Provide analysis in this exact structure:
 
             <h3>Executive Summary</h3>

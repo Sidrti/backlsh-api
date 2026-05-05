@@ -67,12 +67,12 @@ class Helper
             // Convert image to WebP format
             $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
             $image = $manager->read($file);
-    
+
             $encodedImage = $image->toWebp(40);
-        
+
             // Get the actual binary data - THIS IS THE FIX
             $webpImageData = (string) $encodedImage;
-            
+
             // Convert to base64 for ImageKit upload
             $base64Image = base64_encode($webpImageData);
 
@@ -123,7 +123,7 @@ class Helper
             $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
             return true;
         } catch (Exception $e) {
-   
+
             return $e->getMessage();
             echo $e->getMessage(), PHP_EOL;
         }
@@ -375,7 +375,7 @@ class Helper
       $endDate   = $today->endOfDay()->format('Y-m-d H:i:s');
 
 
-                 
+
         $totalTime = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, null, false,false);
         // Main query
         $query = UserActivity::selectRaw(
@@ -511,9 +511,9 @@ class Helper
         if ($user->isPayPalSubscribed()) {
             $subscription = $user->subscriptions()->first();
             $paypalSubscriptionId = $subscription->stripe_id;
-        
+
             if ($subscription) {
-                $priceAmount = $subscription->stripe_price / config('app.unit_price'); 
+                $priceAmount = $subscription->stripe_price / config('app.unit_price');
                 $currency = '$';
                 $current_period_end = Carbon::parse($subscription->ends_at)->format('Y-m-d');
                 $current_period_start = Carbon::parse($subscription->created_at)->format('Y-m-d');
@@ -669,7 +669,7 @@ class Helper
 
         // Determine UI action based on work type
         $uiAction = "NO_BUTTON";
-        
+
         if ($totalSeconds == 0) {
             // No work at all - show download button
             //$uiAction = 'SHOW_DOWNLOAD_BUTTON';
@@ -703,7 +703,7 @@ class Helper
 
 /**
  * Get projects list for specific user
- * 
+ *
  * @param int $userId User ID
  * @param string $startDate Start date
  * @param string $endDate End date
@@ -763,7 +763,7 @@ public static function getProjectsForUser($userId, $status = 'all')
 
 /**
  * Get active projects list for entire team
- * 
+ *
  * @param array $teamUserIds Array of team user IDs
  * @param string $startDate Start date
  * @param string $endDate End date
@@ -798,12 +798,12 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
     foreach ($projects as $project) {
         // Time spent by entire team on this project
         $timeSpentByTeam = self::calculateTotalProjectTime($project->id);
-        
+
         // Calculate percentage of total team time spent on this project
-        $percentageOfTotalTime = $totalTeamTimeTracked > 0 
-            ? round(($timeSpentByTeam / $totalTeamTimeTracked) * 100, 2) 
+        $percentageOfTotalTime = $totalTeamTimeTracked > 0
+            ? round(($timeSpentByTeam / $totalTeamTimeTracked) * 100, 2)
             : 0;
-        
+
         // Calculate progress percentage based on completed vs total tasks
         $taskProgress = self::calculateProjectProgress($project->id);
         $progressPercentage = 0;
@@ -839,7 +839,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
 
     /**
      * Calculate time spent by specific user on a project
-     * 
+     *
      * @param int $projectId Project ID
      * @param int $userId User ID
      * @param string $startDate Start date
@@ -858,7 +858,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
 
     /**
      * Calculate total time tracked on a project by all users
-     * 
+     *
      * @param int $projectId Project ID
      * @param string $startDate Start date
      * @param string $endDate End date
@@ -875,7 +875,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
 
     /**
      * Calculate project progress based on completed tasks
-     * 
+     *
      * @param int $projectId Project ID
      * @return float Progress percentage
      */
@@ -905,7 +905,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
 
     /**
      * Get total projects assigned count
-     * 
+     *
      * @param int $userId User ID
      * @return int Count
      */
@@ -918,7 +918,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
 
     /**
      * Get total tasks assigned count
-     * 
+     *
      * @param int $userId User ID
      * @return int Count
      */
@@ -931,7 +931,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
 
     /**
      * Get count of overdue tasks for user
-     * 
+     *
      * @param int $userId User ID
      * @return int Count
      */
@@ -953,7 +953,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
   {
         $status = strtoupper((string) $status);
         $today = Carbon::now()->toDateString();
-        
+
         $query = DB::table('projects')
             ->where(function ($query) use ($userId,$teamUserIds) {
                 // Projects created by the user
@@ -976,7 +976,7 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
         } else {
             // Filter by one of the standard ENUM statuses (ACTIVE, ON_HOLD, COMPLETED, CANCELLED)
             $validStatuses = ['ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
-            
+
             if (in_array($status, $validStatuses)) {
                 $query->where('status', $status);
             } else {
@@ -1040,6 +1040,88 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
             ]);
             return null;
         }
+    }
+
+    public static function syncUsersToBrevo()
+    {
+        set_time_limit(0);
+        $apiKey = config('app.sendinblue_key_contact');
+        if (!$apiKey) {
+            return "Brevo API key not found in config.";
+        }
+        Log::info('Brevo API key: ' . $apiKey);
+
+        $credentials = \SendinBlue\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', $apiKey);
+        $contactsApi = new \SendinBlue\Client\Api\ContactsApi(new \GuzzleHttp\Client(), $credentials);
+
+        // 1. Get List IDs
+        $registeredListId =  5;
+        $trialDownloadedListId = 10;
+
+        // 2. Get Users with parent_user_id = 0
+        $users = User::where('parent_user_id', 0)->get();
+        $syncedCount = 0;
+        $skippedCount = 0;
+        $failedCount = 0;
+
+        // Optimize: Pre-fetch which users have used the tracker
+        $userIdsWithTracker = UserProductivitySummary::whereIn('user_id', $users->pluck('id'))
+            ->where('total_seconds', '>', 0)
+            ->distinct()
+            ->pluck('user_id')
+            ->toArray();
+
+        foreach ($users as $user) {
+            try {
+                // Determine list
+                $hasUsedTracker = in_array($user->id, $userIdsWithTracker);
+                $listId = $hasUsedTracker ? $trialDownloadedListId : $registeredListId;
+
+                // Split name
+                $parts = explode(' ', $user->name, 2);
+                $firstname = $parts[0];
+                $lastname = $parts[1] ?? '';
+
+                // Create contact
+                $createContact = new \SendinBlue\Client\Model\CreateContact([
+                    'email' => $user->email,
+                    'attributes' => [
+                        'FIRSTNAME' => $firstname,
+                        'LASTNAME' => $lastname
+                    ],
+                    'listIds' => [(int)$listId]
+                ]);
+
+                $contactsApi->createContact($createContact);
+                $syncedCount++;
+            } catch (\Exception $e) {
+                // If contact already exists, createContact throws an exception
+                // Check if it's a conflict/already exists error
+                if (str_contains($e->getMessage(), 'Contact already exist')) {
+                    $skippedCount++;
+                } else {
+                    Log::error("Failed to sync user {$user->id} to Brevo: " . $e->getMessage());
+                    $failedCount++;
+                }
+            }
+        }
+
+        return "Successfully synced {$syncedCount} users. {$skippedCount} users already existed. {$failedCount} failed.";
+    }
+
+    private static function getBrevoListIdByName($contactsApi, $name)
+    {
+        try {
+            $lists = $contactsApi->getLists(100, 0);
+            foreach ($lists->getLists() as $list) {
+                if ($list->getName() === $name) {
+                    return $list->getId();
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error("Brevo error fetching lists: " . $e->getMessage());
+        }
+        return null;
     }
 
 }

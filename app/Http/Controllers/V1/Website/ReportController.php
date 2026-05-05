@@ -27,8 +27,8 @@ class ReportController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'project_id' => 'nullable|integer',
+            'timezone_offset_minutes' => 'nullable|integer'
         ]);
-        
         $processReqOnly = $request->input('process_req_only', false);
         $subActivityReqOnly = $request->input('subactivity_req_only', false);
         $projectId = $request->input('project_id', 0);
@@ -51,7 +51,7 @@ class ReportController extends Controller
             $process = $this->getProcessDataWithScreenshots($userId, $startDate, $endDate, $projectId);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['process' => $process]]);
         }
-        
+
         if ($subActivityReqOnly) {
             $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startDate, $endDate, $projectId);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['user_sub_activities' => $userSubActivities]]);
@@ -63,7 +63,7 @@ class ReportController extends Controller
         $userAttendance = Helper::getUserAttendance($userId, Carbon::parse($startDate), Carbon::parse($endDate));
         $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate);
         $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startDate, $endDate, $projectId);
-        $userTimeline = $this->getUserActivitySlots($userId, $startDate, $endDate);
+        $userTimeline = $this->getUserActivitySlots($userId, $startDate, $endDate, $request->input('timezone_offset_minutes',0));
 
         // New data - Projects and Tasks - NOW USING HELPER
         $totalProjectsAssigned = Helper::getTotalProjectsAssigned($userId);
@@ -79,7 +79,7 @@ class ReportController extends Controller
             'total_time_worked' => $totalHoursWorked,
             'user_sub_activities' => $userSubActivities,
             'user_timeline' => $userTimeline,
-            
+
             // New fields
             'total_projects_assigned' => $totalProjectsAssigned,
             'total_tasks_assigned' => $totalTasksAssigned,
@@ -207,141 +207,242 @@ class ReportController extends Controller
             ];
         })->toArray();
     }
+public static function getUserActivitySlots($userId, $startDate, $endDate, $timezoneOffsetMinutes = 0)
+{
+    $slots = [];
 
-    public static function getUserActivitySlots($userId, $startDate, $endDate)
-    {
-        $slots = [];
-        $activities = UserActivity::where('user_activities.user_id', $userId)
-            ->join('processes as p', 'user_activities.process_id', '=', 'p.id')
-            ->whereBetween('user_activities.start_datetime', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->whereNotIn('p.process_name', ['-1', 'LockApp', 'Idle'])
+    // Create timezone string from offset (e.g. +05:30)
+    $hours = floor(abs($timezoneOffsetMinutes) / 60);
+    $minutes = abs($timezoneOffsetMinutes) % 60;
+    $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
+    $tz = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
+
+    // 🔥 Convert user date range → UTC for DB query using proper timezone alignment
+    $startUTC = Carbon::parse($startDate, $tz)->startOfDay()->setTimezone('UTC');
+    $endUTC   = Carbon::parse($endDate, $tz)->endOfDay()->setTimezone('UTC');
+
+    // 🔥 Fetch activities
+    $activities = UserActivity::where('user_activities.user_id', $userId)
+        ->join('processes as p', 'user_activities.process_id', '=', 'p.id')
+        ->whereBetween('user_activities.start_datetime', [$startUTC, $endUTC])
+        ->whereNotIn('p.process_name', ['-1', 'LockApp', 'Idle'])
+        ->select(
+            'user_activities.id',
+            'user_activities.start_datetime',
+            'user_activities.end_datetime',
+            'user_activities.productivity_status',
+            'p.process_name',
+            'p.type',
+            'p.icon',
+            DB::raw('TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) as duration')
+        )
+        ->having('duration', '>=', 5)
+        ->orderBy('user_activities.start_datetime')
+        ->get()
+        ->map(function ($a) use ($tz) {
+            $a->local_start = Carbon::parse($a->start_datetime)->setTimezone($tz);
+            $a->local_end   = Carbon::parse($a->end_datetime)->setTimezone($tz);
+            return $a;
+        })
+        ->values();
+
+    // 🔥 Browser activity IDs
+    $browserActivityIds = $activities->where('type', 'BROWSER')->pluck('id');
+
+    // 🔥 Fetch sub activities
+    $subActivities = [];
+    if ($browserActivityIds->isNotEmpty()) {
+        $subActivities = UserSubActivity::whereIn('user_activity_id', $browserActivityIds)
+            ->join('processes as sp', 'user_sub_activities.process_id', '=', 'sp.id')
+            ->whereBetween('user_sub_activities.start_datetime', [$startUTC, $endUTC])
+            ->whereNotIn('sp.process_name', ['-1', 'LockApp', 'Idle'])
             ->select(
-                'user_activities.id',
-                'user_activities.start_datetime',
-                'user_activities.end_datetime',
-                'user_activities.productivity_status',
-                'p.process_name',
-                'p.type',
-                'p.icon',
-                DB::raw('TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime) as duration')
+                'user_sub_activities.user_activity_id',
+                'user_sub_activities.id',
+                'user_sub_activities.start_datetime',
+                'user_sub_activities.end_datetime',
+                'user_sub_activities.productivity_status',
+                'sp.process_name',
+                'sp.type',
+                'sp.icon',
+                DB::raw('TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime) as duration')
             )
             ->having('duration', '>=', 5)
-            ->orderBy('user_activities.start_datetime')
-            ->get();
+            ->orderBy('user_sub_activities.start_datetime')
+            ->get()
+            ->map(function ($a) use ($tz) {
+                $a->local_start = Carbon::parse($a->start_datetime)->setTimezone($tz);
+                $a->local_end   = Carbon::parse($a->end_datetime)->setTimezone($tz);
+                return $a;
+            })
+            ->groupBy('user_activity_id');
+    }
 
-        $browserActivityIds = $activities->where('type', 'BROWSER')->pluck('id')->toArray();
+    // 🔥 Iterate days in USER LOCAL TIME
+    $period = Carbon::parse($startDate, $tz)->toPeriod(Carbon::parse($endDate, $tz));
 
-        $subActivities = [];
-        if (!empty($browserActivityIds)) {
-            $subActivitiesCollection = UserSubActivity::whereIn('user_activity_id', $browserActivityIds)
-                ->join('processes as sp', 'user_sub_activities.process_id', '=', 'sp.id')
-                ->whereNotIn('sp.process_name', ['-1', 'LockApp', 'Idle'])
-                ->select(
-                    'user_sub_activities.user_activity_id',
-                    'user_sub_activities.id',
-                    'user_sub_activities.start_datetime',
-                    'user_sub_activities.end_datetime',
-                    'user_sub_activities.productivity_status',
-                    'sp.process_name',
-                    'sp.type',
-                    'sp.icon',
-                    DB::raw('TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime) as duration')
-                )
-                ->having('duration', '>=', 5)
-                ->orderBy('user_sub_activities.start_datetime')
-                ->get();
+    foreach ($period as $date) {
+        $date->setTimezone($tz);
+        $dayStart = $date->copy()->startOfDay();
+        $dayEnd   = $date->copy()->endOfDay();
 
-            $subActivities = $subActivitiesCollection->groupBy('user_activity_id');
-        }
-
-        $period = new \DatePeriod(
-            new \DateTime($startDate),
-            new \DateInterval('P1D'),
-            (new \DateTime($endDate))->modify('+1 day')
+        $dayActivities = $activities->filter(fn($a) =>
+            $a->local_end > $dayStart && $a->local_start < $dayEnd
         );
 
-        foreach ($period as $date) {
-            $dayStart = $date->format('Y-m-d 00:00:00');
-            $dayEnd = $date->format('Y-m-d 23:59:59');
+        $daySlots = [];
 
-            $dayActivities = $activities->filter(function ($activity) use ($dayStart, $dayEnd) {
-                return $activity->start_datetime >= $dayStart && $activity->start_datetime <= $dayEnd;
-            });
+        // 🔥 2-hour slots aligned to LOCAL time
+        for ($hour = 0; $hour < 24; $hour += 2) {
+            $slotStart = $date->copy()->setTime($hour, 0, 0);
+            $slotEnd   = $slotStart->copy()->addHours(2)->subSecond();
 
-            $daySlots = [];
+            $processed = collect();
+            $productive = $nonProductive = $neutral = 0;
 
-            for ($hour = 0; $hour < 24; $hour += 2) {
-                $slotStart = $date->format('Y-m-d') . ' ' . str_pad($hour, 2, '0', STR_PAD_LEFT) . ':00:00';
-                $slotEnd = $date->format('Y-m-d') . ' ' . str_pad($hour + 2, 2, '0', STR_PAD_LEFT) . ':00:00';
+            foreach ($dayActivities as $activity) {
 
-                $slotActivities = $dayActivities->filter(function ($activity) use ($slotStart, $slotEnd) {
-                    return $activity->start_datetime >= $slotStart && $activity->start_datetime < $slotEnd;
-                });
-
-                $processedActivities = collect();
-                $productiveSeconds = 0;
-                $nonProductiveSeconds = 0;
-                $neutralSeconds = 0;
-
-                foreach ($slotActivities as $activity) {
-                    $activity->icon_url = asset('storage/' . ($activity->icon ?? config('app.process_default_image')));
-                    $activity->time_used_human = Helper::convertSecondsInReadableFormat($activity->duration);
-
-                    if ($activity->type === 'BROWSER') {
-                        if (isset($subActivities[$activity->id]) && $subActivities[$activity->id]->isNotEmpty()) {
-                            foreach ($subActivities[$activity->id] as $subActivity) {
-                                $subActivity->icon_url = asset('storage/' . ($subActivity->icon ?? config('app.process_default_image')));
-                                $subActivity->time_used_human = Helper::convertSecondsInReadableFormat($subActivity->duration);
-                                $processedActivities->push($subActivity);
-
-                                $duration = $subActivity->duration;
-                                if ($subActivity->productivity_status === 'PRODUCTIVE') {
-                                    $productiveSeconds += $duration;
-                                } elseif ($subActivity->productivity_status === 'NONPRODUCTIVE') {
-                                    $nonProductiveSeconds += $duration;
-                                } else {
-                                    $neutralSeconds += $duration;
-                                }
-                            }
-                        }
-                    } else {
-                        $processedActivities->push($activity);
-                        $duration = $activity->duration;
-                        if ($activity->productivity_status === 'PRODUCTIVE') {
-                            $productiveSeconds += $duration;
-                        } elseif ($activity->productivity_status === 'NONPRODUCTIVE') {
-                            $nonProductiveSeconds += $duration;
-                        } else {
-                            $neutralSeconds += $duration;
-                        }
-                    }
+                // ✅ Only include activities that START in this slot (or overlap if preferred, but existing logic was start-based)
+                if (!($activity->local_start >= $slotStart && $activity->local_start < $slotEnd)) {
+                    continue;
                 }
 
-                $totalSeconds = $productiveSeconds + $nonProductiveSeconds + $neutralSeconds;
+                $iconUrl = asset('storage/' . ($activity->icon ?? config('app.process_default_image')));
+                $timeHuman = Helper::convertSecondsInReadableFormat($activity->duration);
 
-                if ($totalSeconds > 0) {
-                    if ($productiveSeconds >= ($totalSeconds / 2)) {
-                        $slotStatus = 'PRODUCTIVE';
-                    } elseif ($nonProductiveSeconds >= ($totalSeconds / 2)) {
-                        $slotStatus = 'NONPRODUCTIVE';
-                    } else {
-                        $slotStatus = 'NEUTRAL';
+                if ($activity->type === 'BROWSER' && isset($subActivities[$activity->id])) {
+
+                    $hasSubInSlot = false;
+
+                    foreach ($subActivities[$activity->id] as $sub) {
+
+                        if (!($sub->local_start >= $slotStart && $sub->local_start < $slotEnd)) {
+                            continue;
+                        }
+
+                        $hasSubInSlot = true;
+
+                        $subIcon = asset('storage/' . ($sub->icon ?? config('app.process_default_image')));
+                        $subTime = Helper::convertSecondsInReadableFormat($sub->duration);
+
+                        $processed->push((object)[
+                            'id' => $sub->id,
+                            'process_name' => $sub->process_name,
+                            'type' => $sub->type,
+                            'productivity_status' => $sub->productivity_status,
+                            'duration' => $sub->duration,
+                            'icon_url' => $subIcon,
+                            'time_used_human' => $subTime,
+                            'local_start' => $sub->local_start,
+                            'local_end' => $sub->local_end,
+                        ]);
+
+                        match ($sub->productivity_status) {
+                            'PRODUCTIVE' => $productive += $sub->duration,
+                            'NONPRODUCTIVE' => $nonProductive += $sub->duration,
+                            default => $neutral += $sub->duration,
+                        };
                     }
+
+                    // ✅ fallback if no sub activity
+                    if (!$hasSubInSlot) {
+                        $processed->push((object)[
+                            'id' => $activity->id,
+                            'process_name' => $activity->process_name,
+                            'type' => $activity->type,
+                            'productivity_status' => $activity->productivity_status,
+                            'duration' => $activity->duration,
+                            'icon_url' => $iconUrl,
+                            'time_used_human' => $timeHuman,
+                            'local_start' => $activity->local_start,
+                            'local_end' => $activity->local_end,
+                        ]);
+
+                        match ($activity->productivity_status) {
+                            'PRODUCTIVE' => $productive += $activity->duration,
+                            'NONPRODUCTIVE' => $nonProductive += $activity->duration,
+                            default => $neutral += $activity->duration,
+                        };
+                    }
+
                 } else {
-                    $slotStatus = 'NO_DATA';
-                }
+                    $processed->push((object)[
+                        'id' => $activity->id,
+                        'process_name' => $activity->process_name,
+                        'type' => $activity->type,
+                        'productivity_status' => $activity->productivity_status,
+                        'duration' => $activity->duration,
+                        'icon_url' => $iconUrl,
+                        'time_used_human' => $timeHuman,
+                        'local_start' => $activity->local_start,
+                        'local_end' => $activity->local_end,
+                    ]);
 
-                $daySlots[] = [
-                    'slot_start' => $slotStart,
-                    'slot_end'   => $slotEnd,
-                    'status'     => $slotStatus,
-                    'activities' => $processedActivities->values()
-                ];
+                    match ($activity->productivity_status) {
+                        'PRODUCTIVE' => $productive += $activity->duration,
+                        'NONPRODUCTIVE' => $nonProductive += $activity->duration,
+                        default => $neutral += $activity->duration,
+                    };
+                }
             }
 
-            $slots[$date->format('Y-m-d')] = $daySlots;
+            $total = $productive + $nonProductive + $neutral;
+
+            $status = match (true) {
+                $total === 0 => 'NO_DATA',
+                $productive >= $total / 2 => 'PRODUCTIVE',
+                $nonProductive >= $total / 2 => 'NONPRODUCTIVE',
+                default => 'NEUTRAL',
+            };
+
+            // 🔥 Sort + merge
+            $merged = $processed
+                ->sortBy(fn($a) => $a->local_start->timestamp)
+                ->values()
+                ->reduce(function ($carry, $act) {
+
+                    $last = $carry->last();
+
+                    if ($last &&
+                        $last->process_name === $act->process_name &&
+                        $last->productivity_status === $act->productivity_status
+                    ) {
+                        $last->duration += $act->duration;
+                        $last->local_end = $act->local_end;
+                        $last->time_used_human = Helper::convertSecondsInReadableFormat($last->duration);
+                        return $carry;
+                    }
+
+                    return $carry->push(clone $act);
+
+                }, collect());
+
+            // 🔥 Final output (ISO format with timezone)
+            $merged = $merged->map(function ($a) {
+                return [
+                    'id' => $a->id,
+                    'process_name' => $a->process_name,
+                    'type' => $a->type,
+                    'productivity_status' => $a->productivity_status,
+                    'duration' => $a->duration,
+                    'icon_url' => $a->icon_url,
+                    'time_used_human' => $a->time_used_human,
+                    'start_datetime' => $a->local_start->toIso8601String(),
+                    'end_datetime'   => $a->local_end->toIso8601String(),
+                ];
+            });
+
+            $daySlots[] = [
+                'slot_start' => $slotStart->toIso8601String(),
+                'slot_end'   => $slotEnd->toIso8601String(),
+                'status'     => $status,
+                'activities' => $merged->values()
+            ];
         }
 
-        return $slots;
+        $slots[$date->format('Y-m-d')] = $daySlots;
     }
+
+    return $slots;
+}
 }

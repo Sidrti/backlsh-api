@@ -120,4 +120,14 @@ class User extends Authenticatable
         return $subscription !== null;
     }
 
+    public function subUsers()
+    {
+        return $this->hasMany(User::class, 'parent_user_id');
+    }
+
+    public function latestActivity()
+    {
+        return $this->hasOne(UserActivity::class)->latestOfMany('start_datetime');
+    }
+
 }
