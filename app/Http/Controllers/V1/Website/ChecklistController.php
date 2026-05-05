@@ -139,7 +139,7 @@ class ChecklistController extends Controller
                     return !empty($item);
                 });
             }
-            
+
             if (empty($checklistItems)) {
                  return response()->json([
                     'status_code' => 2,
@@ -162,6 +162,7 @@ class ChecklistController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error('Failed to generate checklist', ['error' => $e->getMessage()]);
             return response()->json([
                 'status_code' => 2,
                 'message' => 'Failed to generate checklist. Please try again later.',

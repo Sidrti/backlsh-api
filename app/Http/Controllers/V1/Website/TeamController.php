@@ -84,13 +84,13 @@ class TeamController extends Controller
         $tenDaysAgo = $currentDate->copy()->subDays(10)->toDateString();
 
         // Fetch team members along with their activity status
-        $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode')
+        $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
             ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
              ->where(function ($query) use ($userId) {
                 $query->where('users.parent_user_id', $userId)
                       ->orWhere('users.id', $userId);
                 })
-            ->groupBy('users.id','users.name','users.email','users.profile_picture','users.stealth_mode')
+            ->groupBy('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
             ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
             ->get();
 
@@ -140,7 +140,20 @@ class TeamController extends Controller
             return response()->json(['status_code'=> 1,'message' => 'Stealth mode updated successfully.'], 200);
         }
         return response()->json(['status_code'=> 2,'message' => 'Stealth mode not updated'], 200);
+    }
 
+    public function deleteTeamMember($userId)
+    {
+        // Find the user
+        $user = User::findOrFail($userId);
+
+        // Check if the current user is the parent of the user being deleted
+        if($user->parent_user_id == auth()->user()->id) {
+            $user->delete();
+            return response()->json(['status_code'=> 1,'message' => 'Member deleted successfully.'], 200);
+        }
+
+        return response()->json(['status_code'=> 2,'message' => 'You do not have permission to delete this member.'], 403);
     }
 
     private function inviteNewTeamMember($name, $email)

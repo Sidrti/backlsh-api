@@ -138,6 +138,10 @@ class DashboardController extends Controller
             'active_project_list' => $activeProjectList,
             'project_overdue' => $projectOverdue
         ];
+        if(!Helper::hasUsedBacklsh($teamUserIds)){
+            return response()->json(config('dummy.user_dashboard'));
+        }
+
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
  private function getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, $teamRecords = true)
