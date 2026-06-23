@@ -26,7 +26,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
         if($user) {
-            if (Hash::check($request->input('password'), $user->password)) { 
+            if (Hash::check($request->input('password'), $user->password)) {
                 $token = $user->createToken('api-token')->plainTextToken;
                 $user->append('profile_picture');
                 return response()->json(['status_code' => 1,'data' => ['user' => $user, 'token' => $token ],'message'=>'Login successfull.']);
@@ -39,7 +39,7 @@ class AuthController extends Controller
             return response()->json(['status_code' => 2, 'data' => [], 'message'=>'Account not registered']);
         }
     }
-    public function registerAdmin(Request $request) 
+    public function registerAdmin(Request $request)
     {
         $request->validate([
             'name' => 'required',
@@ -69,7 +69,7 @@ class AuthController extends Controller
                     'token' => $token,
                 ],
                 "message" => $message,
-    
+
             ];
             return response()->json($response);
         }
@@ -78,7 +78,7 @@ class AuthController extends Controller
             $data = [
                 'status_code' => 2,
                 "message" => $message,
-    
+
             ];
             return response()->json($data);
         }
@@ -171,7 +171,7 @@ class AuthController extends Controller
         if($type == 'FORGET_PASSWORD') {
             $verificationLink = $baseUrl . '/api/v1/website/auth/forget-password/verify-email/' . $verificationToken.'/'.$user_id;
         }
-        
+
         return $verificationLink;
     }
     public function verifyEmail($verificationToken,$user_id)
@@ -188,7 +188,7 @@ class AuthController extends Controller
             $data = [
                 'status_code' => 2,
                 'message' => 'Unable to verify email. Please try again',
-    
+
             ];
             return response()->json($data);
         }
@@ -208,7 +208,7 @@ class AuthController extends Controller
             $data = [
                 'status_code' => 2,
                 'message' => 'Unable to verify email. Please try again',
-    
+
             ];
             return response()->json($data);
         }
@@ -225,12 +225,12 @@ class AuthController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
-        
+
             $user = User::where('email', $googleUser->getEmail())->first();
-    
+
             if (!$user) {
                 $user = Helper::createNewUser($googleUser->getName(),$googleUser->getEmail(),rand(10000,1000000),2,'ADMIN');
-    
+
                 $message = 'Hurray '.$googleUser->getName().' ! Happy productivity.';
             }
             else {
@@ -251,7 +251,7 @@ class AuthController extends Controller
             $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
         }
        $subscription = (Helper::getUserSubscription(auth()->user()->id));
-       
+
           $data = [
             'status_code' => 1,
             'data' => [
@@ -264,7 +264,7 @@ class AuthController extends Controller
         ];
         return response()->json($data);
     }
-    public function meUpdate(Request $request) 
+    public function meUpdate(Request $request)
     {
         $request->validate([
             'media' => 'required|mimes:png,jpg,jpeg|max:5000',
@@ -283,7 +283,35 @@ class AuthController extends Controller
         ];
         return response()->json($data);
     }
-    public function fetchUserAccountDetails() 
+
+    public function updateSettings(Request $request)
+    {
+        $user = auth()->user();
+        
+        $settings = $user->settings ?? [];
+        
+        if ($request->has('report_time')) {
+            $settings['report_time'] = $request->input('report_time');
+        }
+        
+        if ($request->has('report_emails')) {
+            $settings['report_emails'] = is_array($request->input('report_emails')) ? $request->input('report_emails') : array_map('trim', explode(',', $request->input('report_emails')));
+        }
+        
+        if ($request->has('timezone')) {
+            $settings['timezone'] = $request->input('timezone');
+        }
+        
+        $user->settings = $settings;
+        $user->save();
+        
+        return response()->json([
+            'status_code' => 1,
+            'message' => 'Settings updated successfully',
+            'data' => $settings
+        ]);
+    }
+    public function fetchUserAccountDetails()
     {
         $user = auth()->user();
         $subscription = Helper::getUserSubscription(auth()->user()->id);
@@ -308,7 +336,7 @@ class AuthController extends Controller
     public function handleLinkedinCallback()
     {
         $linkedinUser = Socialite::driver('linkedin-openid')->stateless()->user();
-        
+
         $user = User::where('email', $linkedinUser->getEmail())->first();
 
         if (!$user) {
@@ -325,7 +353,7 @@ class AuthController extends Controller
         else {
             $user = User::where('email', $linkedinUser->getEmail())->first();
             $message = 'Welcome back '.$linkedinUser->getName();
-           
+
         }
         $token = $user->createToken('api-token')->plainTextToken;
         return redirect(config('app.website_url').'/social-login?token=' . $token);
@@ -365,7 +393,7 @@ class AuthController extends Controller
         $filePath = config('app.app_setup_link');
         return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
     }
-       
+
     private function getUserCompletedSteps($user,$subscribed=false)
     {
         $teamMemberExists = User::where('parent_user_id',$user->id)->exists();
@@ -379,7 +407,7 @@ class AuthController extends Controller
             ($teamMemberExists ? 1 : 0) + // Add Team Member
             $subscribed                               // Add Card
         );
-    
+
         // Calculate the percentage of steps completed
         $percentageCompleted = ($completedSteps / $totalSteps) * 100;
         return [

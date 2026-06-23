@@ -6,6 +6,7 @@ use App\Models\AttendanceSchedule;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserActivity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -15,16 +16,16 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date', 
+            'end_date' => 'required|date|after_or_equal:start_date',
             'start_time' => 'required',
             'end_time' => 'required',
             'user_ids' => 'required|array',
             'user_ids.*' => 'exists:users,id',
-            'min_hours' => 'required|numeric' 
+            'min_hours' => 'required|numeric'
         ]);
 
         $schedule = new AttendanceSchedule();
-        $schedule->start_date = $request->start_date; 
+        $schedule->start_date = $request->start_date;
         $schedule->end_date = $request->end_date;
         $schedule->start_time = $request->start_time;
         $schedule->end_time = $request->end_time;
@@ -43,17 +44,24 @@ class AttendanceController extends Controller
         $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
+            'timezone_offset_minutes' => 'nullable|integer'
         ]);
-    
+
+        $timezoneOffsetMinutes = $request->input('timezone_offset_minutes', 0);
+        $hours = floor(abs($timezoneOffsetMinutes) / 60);
+        $minutes = abs($timezoneOffsetMinutes) % 60;
+        $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
+        $timezoneString = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
+
         $userId = auth()->user()->id;
-    
+
         $teamMembers = User::where(function ($query) use ($userId) {
             $query->where('users.parent_user_id', $userId)
                   ->orWhere('users.id', $userId);
         })->get();
-    
+
         $attendanceRecords = [];
-    
+
         // Iterate over each team member
         foreach ($teamMembers as $user) {
             $score = 0;
@@ -61,12 +69,12 @@ class AttendanceController extends Controller
             $startDate = Carbon::parse($request->input('start_date'));
             $endDate = Carbon::parse($request->input('end_date'));
             $userAttendance = [];
-    
+
             // Iterate over each date in the date range
             for ($date = $startDate; $date->lte($endDate); $date->addDay()) {
                 $totalScore++;
                 $attendanceStatus = 'ABSENT'; // Default attendance status
-    
+
                 // Check if there's an attendance schedule for the current date
                 $schedule = AttendanceSchedule::where('start_date', '<=', $date)
                     ->where('end_date', '>=', $date)
@@ -74,7 +82,7 @@ class AttendanceController extends Controller
                         $query->where('user_id', $user->id);
                     })
                     ->first();
-    
+
                 $dateEndOfDay = $date->copy()->endOfDay();
                 if ($schedule) {
                     $totalHoursWorked = Helper::calculateTotalHoursByUserId($user->id,$date,$dateEndOfDay);
@@ -89,20 +97,35 @@ class AttendanceController extends Controller
                     ($totalHoursWorked > 1) ? $score++ : $score;
                     $scheduleExists = false;
                 }
-                
+
+                $firstActivity = UserActivity::where('user_id', $user->id)
+                    ->whereDate('start_datetime', $date->toDateString())
+                    ->orderBy('start_datetime', 'asc')
+                    ->first();
+
+                $lastActivity = UserActivity::where('user_id', $user->id)
+                    ->whereDate('end_datetime', $date->toDateString())
+                    ->orderBy('end_datetime', 'desc')
+                    ->first();
+
+                $loginTime = $firstActivity ? Carbon::parse($firstActivity->start_datetime)->setTimezone($timezoneString)->format('H:i') : null;
+                $logoutTime = $lastActivity ? Carbon::parse($lastActivity->end_datetime)->setTimezone($timezoneString)->format('H:i') : null;
+
                 // Add the attendance record to the user's attendance array
                 $userAttendance[] = [
                     'date' => $date->toDateString(),
                     'totalHoursWorked' => $totalHoursWorked,
                     'attendance_status' => $attendanceStatus,
-                  
+                    'login_time' => $loginTime,
+                    'logout_time' => $logoutTime,
                 ];
             }
-    
+
             // Add user's attendance to the main attendanceRecords array
             $attendanceRecords[] = [
                 'user_id' => $user->id,
                 'user_name' => $user->name,
+                'profile_picture' => $user->profile_picture,
                 'email' => $user->email,
                 'schedule_exists' => $scheduleExists,
                 'score' => $score,
@@ -110,7 +133,7 @@ class AttendanceController extends Controller
                 'attendance' => $userAttendance,
             ];
         }
-    
+
         return response()->json([
             'status_code' => 1,
             'data' => $attendanceRecords,

@@ -38,4 +38,7 @@ jobs:
             storage/app/public/uploads/*
             .git
             .github
+            .env
+            .htaccess
+            public/.htaccess
 
