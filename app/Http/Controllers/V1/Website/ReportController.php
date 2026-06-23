@@ -37,33 +37,44 @@ class ReportController extends Controller
             return response()->json(config('dummy.report'));
         }
 
-        $startDate = Carbon::parse(
-            $request->input('start_date', Carbon::now()->subDays(7)->toDateString())
+        $timezoneOffsetMinutes = $request->input('timezone_offset_minutes', 0);
+        $hours = floor(abs($timezoneOffsetMinutes) / 60);
+        $minutes = abs($timezoneOffsetMinutes) % 60;
+        $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
+        $tz = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
+
+        $startDateLocal = Carbon::parse(
+            $request->input('start_date', Carbon::now()->setTimezone($tz)->subDays(7)->toDateString()),
+            $tz
         )->startOfDay();
 
-        $endDate = Carbon::parse(
-            $request->input('end_date', Carbon::now()->toDateString())
+        $endDateLocal = Carbon::parse(
+            $request->input('end_date', Carbon::now()->setTimezone($tz)->toDateString()),
+            $tz
         )->endOfDay();
+
+        $startUTC = $startDateLocal->copy()->setTimezone('UTC');
+        $endUTC = $endDateLocal->copy()->setTimezone('UTC');
 
         $userId = $request->input('user_id');
 
         if ($processReqOnly) {
-            $process = $this->getProcessDataWithScreenshots($userId, $startDate, $endDate, $projectId);
+            $process = $this->getProcessDataWithScreenshots($userId, $startUTC, $endUTC, $projectId);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['process' => $process]]);
         }
 
         if ($subActivityReqOnly) {
-            $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startDate, $endDate, $projectId);
+            $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startUTC, $endUTC, $projectId);
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['user_sub_activities' => $userSubActivities]]);
         }
         // Existing data
-        $process = $this->getProcessDataWithScreenshots($userId, $startDate, $endDate, $projectId);
-        $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate, 'PRODUCTIVE');
-        $userWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, false);
-        $userAttendance = Helper::getUserAttendance($userId, Carbon::parse($startDate), Carbon::parse($endDate));
-        $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId, $startDate, $endDate);
-        $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startDate, $endDate, $projectId);
-        $userTimeline = $this->getUserActivitySlots($userId, $startDate, $endDate, $request->input('timezone_offset_minutes',0));
+        $process = $this->getProcessDataWithScreenshots($userId, $startUTC, $endUTC, $projectId);
+        $totalProductiveHours = Helper::calculateTotalHoursByUserId($userId, $startDateLocal, $endDateLocal, 'PRODUCTIVE');
+        $userWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId, $startDateLocal, $endDateLocal, false);
+        $userAttendance = Helper::getUserAttendance($userId, $startDateLocal->copy(), $endDateLocal->copy());
+        $totalHoursWorked = Helper::calculateTotalHoursByUserId($userId, $startDateLocal, $endDateLocal);
+        $userSubActivities = $this->getSubActivityDataWithScreenshots($userId, $startUTC, $endUTC, $projectId);
+        $userTimeline = $this->getUserActivitySlots($userId, $startDateLocal->toDateString(), $endDateLocal->toDateString(), $timezoneOffsetMinutes);
 
         // New data - Projects and Tasks - NOW USING HELPER
         $totalProjectsAssigned = Helper::getTotalProjectsAssigned($userId);
@@ -90,7 +101,7 @@ class ReportController extends Controller
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
 
-    private function getProcessDataWithScreenshots($userId, $startDate, $endDate, $projectId = 0)
+    private function getProcessDataWithScreenshots($userId, $startUTC, $endUTC, $projectId = 0)
     {
         $processData = UserActivity::join('processes', 'user_activities.process_id', '=', 'processes.id')
             ->select(
@@ -108,9 +119,8 @@ class ReportController extends Controller
             ->when($projectId != 0, function ($query) use ($projectId) {
                 $query->where('user_activities.project_id', $projectId);
             })
-            ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
+            ->whereBetween('user_activities.start_datetime', [$startUTC, $endUTC])
+            ->whereBetween('user_activities.end_datetime', [$startUTC, $endUTC])
             ->havingRaw('SUM(TIMESTAMPDIFF(SECOND, user_activities.start_datetime, user_activities.end_datetime)) >= 60')
             ->groupBy('user_activities.process_id', 'processes.process_name', 'user_activities.productivity_status', 'processes.type', 'processes.icon')
             ->orderByDesc('total_seconds')
@@ -119,7 +129,7 @@ class ReportController extends Controller
         foreach ($processData as $item) {
             $processId = $item->process_id;
 
-            $screenshots = UserScreenshot::whereBetween('created_at', [$startDate, $endDate])
+            $screenshots = UserScreenshot::whereBetween('created_at', [$startUTC, $endUTC])
                 ->where('process_id', $processId)
                 ->where('user_id', $userId)
                 ->get();
@@ -132,7 +142,7 @@ class ReportController extends Controller
         return $processData;
     }
 
-    private function getSubActivityDataWithScreenshots($userId, $startDate, $endDate, $projectId = 0)
+    private function getSubActivityDataWithScreenshots($userId, $startUTC, $endUTC, $projectId = 0)
     {
         $userSubActivityData = UserSubActivity::join('processes', 'user_sub_activities.process_id', '=', 'processes.id')
             ->select(
@@ -151,9 +161,8 @@ class ReportController extends Controller
             ->when($projectId != 0, function ($query) use ($projectId) {
                 $query->where('user_activities.project_id', $projectId);
             })
-            ->whereRaw("DATE(user_activities.start_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.end_datetime) BETWEEN ? AND ?", [$startDate, $endDate])
-            ->whereRaw("DATE(user_activities.start_datetime) = DATE(user_activities.end_datetime)")
+            ->whereBetween('user_activities.start_datetime', [$startUTC, $endUTC])
+            ->whereBetween('user_activities.end_datetime', [$startUTC, $endUTC])
             ->havingRaw('SUM(TIMESTAMPDIFF(SECOND, user_sub_activities.start_datetime, user_sub_activities.end_datetime)) >= 60')
             ->groupBy('user_sub_activities.process_id', 'processes.process_name', 'user_sub_activities.productivity_status', 'processes.type', 'processes.icon')
             ->orderByDesc('total_seconds')
@@ -300,47 +309,56 @@ public static function getUserActivitySlots($userId, $startDate, $endDate, $time
             $processed = collect();
             $productive = $nonProductive = $neutral = 0;
 
+            $slotStartBoundary = $slotStart->timestamp;
+            $slotEndBoundary = $slotStart->copy()->addHours(2)->timestamp;
+
             foreach ($dayActivities as $activity) {
 
-                // ✅ Only include activities that START in this slot (or overlap if preferred, but existing logic was start-based)
-                if (!($activity->local_start >= $slotStart && $activity->local_start < $slotEnd)) {
+                $overlapStart = max($activity->local_start->timestamp, $slotStartBoundary);
+                $overlapEnd = min($activity->local_end->timestamp, $slotEndBoundary);
+
+                if ($overlapStart >= $overlapEnd) {
                     continue;
                 }
 
+                $overlapDuration = $overlapEnd - $overlapStart;
                 $iconUrl = asset('storage/' . ($activity->icon ?? config('app.process_default_image')));
-                $timeHuman = Helper::convertSecondsInReadableFormat($activity->duration);
+                $timeHuman = Helper::convertSecondsInReadableFormat($overlapDuration);
 
                 if ($activity->type === 'BROWSER' && isset($subActivities[$activity->id])) {
 
                     $hasSubInSlot = false;
 
                     foreach ($subActivities[$activity->id] as $sub) {
+                        $subOverlapStart = max($sub->local_start->timestamp, $slotStartBoundary);
+                        $subOverlapEnd = min($sub->local_end->timestamp, $slotEndBoundary);
 
-                        if (!($sub->local_start >= $slotStart && $sub->local_start < $slotEnd)) {
+                        if ($subOverlapStart >= $subOverlapEnd) {
                             continue;
                         }
 
                         $hasSubInSlot = true;
+                        $subOverlapDuration = $subOverlapEnd - $subOverlapStart;
 
                         $subIcon = asset('storage/' . ($sub->icon ?? config('app.process_default_image')));
-                        $subTime = Helper::convertSecondsInReadableFormat($sub->duration);
+                        $subTime = Helper::convertSecondsInReadableFormat($subOverlapDuration);
 
                         $processed->push((object)[
                             'id' => $sub->id,
                             'process_name' => $sub->process_name,
                             'type' => $sub->type,
                             'productivity_status' => $sub->productivity_status,
-                            'duration' => $sub->duration,
+                            'duration' => $subOverlapDuration,
                             'icon_url' => $subIcon,
                             'time_used_human' => $subTime,
-                            'local_start' => $sub->local_start,
-                            'local_end' => $sub->local_end,
+                            'local_start' => Carbon::createFromTimestamp($subOverlapStart)->setTimezone($tz),
+                            'local_end' => Carbon::createFromTimestamp($subOverlapEnd)->setTimezone($tz),
                         ]);
 
                         match ($sub->productivity_status) {
-                            'PRODUCTIVE' => $productive += $sub->duration,
-                            'NONPRODUCTIVE' => $nonProductive += $sub->duration,
-                            default => $neutral += $sub->duration,
+                            'PRODUCTIVE' => $productive += $subOverlapDuration,
+                            'NONPRODUCTIVE' => $nonProductive += $subOverlapDuration,
+                            default => $neutral += $subOverlapDuration,
                         };
                     }
 
@@ -351,17 +369,17 @@ public static function getUserActivitySlots($userId, $startDate, $endDate, $time
                             'process_name' => $activity->process_name,
                             'type' => $activity->type,
                             'productivity_status' => $activity->productivity_status,
-                            'duration' => $activity->duration,
+                            'duration' => $overlapDuration,
                             'icon_url' => $iconUrl,
                             'time_used_human' => $timeHuman,
-                            'local_start' => $activity->local_start,
-                            'local_end' => $activity->local_end,
+                            'local_start' => Carbon::createFromTimestamp($overlapStart)->setTimezone($tz),
+                            'local_end' => Carbon::createFromTimestamp($overlapEnd)->setTimezone($tz),
                         ]);
 
                         match ($activity->productivity_status) {
-                            'PRODUCTIVE' => $productive += $activity->duration,
-                            'NONPRODUCTIVE' => $nonProductive += $activity->duration,
-                            default => $neutral += $activity->duration,
+                            'PRODUCTIVE' => $productive += $overlapDuration,
+                            'NONPRODUCTIVE' => $nonProductive += $overlapDuration,
+                            default => $neutral += $overlapDuration,
                         };
                     }
 
@@ -371,17 +389,17 @@ public static function getUserActivitySlots($userId, $startDate, $endDate, $time
                         'process_name' => $activity->process_name,
                         'type' => $activity->type,
                         'productivity_status' => $activity->productivity_status,
-                        'duration' => $activity->duration,
+                        'duration' => $overlapDuration,
                         'icon_url' => $iconUrl,
                         'time_used_human' => $timeHuman,
-                        'local_start' => $activity->local_start,
-                        'local_end' => $activity->local_end,
+                        'local_start' => Carbon::createFromTimestamp($overlapStart)->setTimezone($tz),
+                        'local_end' => Carbon::createFromTimestamp($overlapEnd)->setTimezone($tz),
                     ]);
 
                     match ($activity->productivity_status) {
-                        'PRODUCTIVE' => $productive += $activity->duration,
-                        'NONPRODUCTIVE' => $nonProductive += $activity->duration,
-                        default => $neutral += $activity->duration,
+                        'PRODUCTIVE' => $productive += $overlapDuration,
+                        'NONPRODUCTIVE' => $nonProductive += $overlapDuration,
+                        default => $neutral += $overlapDuration,
                     };
                 }
             }

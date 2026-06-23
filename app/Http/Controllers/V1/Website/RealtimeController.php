@@ -14,6 +14,16 @@ class RealtimeController extends Controller
 {
     public function fetchRealtimeUpdates(Request $request)
     {
+        $request->validate([
+            'timezone_offset_minutes' => 'nullable|integer'
+        ]);
+
+        $timezoneOffsetMinutes = $request->input('timezone_offset_minutes', 0);
+        $hours = floor(abs($timezoneOffsetMinutes) / 60);
+        $minutes = abs($timezoneOffsetMinutes) % 60;
+        $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
+        $timezoneString = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
+
         $userId = auth()->user()->id;
         $teamUserIds = User::where('parent_user_id', $userId)
             ->orWhere('id', $userId)
@@ -24,13 +34,13 @@ class RealtimeController extends Controller
         $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
         if ($request->has('filter')) {
             if ($request->filter == 'PRODUCTIVE_FROM_30_MIN') {
-                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, 'PRODUCTIVE');
+                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, 'PRODUCTIVE', $timezoneString);
             } else {
-                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, 'UNPRODUCTIVE');
+                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, 'UNPRODUCTIVE', $timezoneString);
             }
         } else {
             $tenMinutesAgo = Carbon::now()->subMinutes(10);
-            $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId);
+            $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, null, $timezoneString);
         }
 
         $nonProductiveUserCount = $this->countNonProductiveUsers($userId);
@@ -98,7 +108,7 @@ class RealtimeController extends Controller
         });
         return $users;
     }
-private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5, $status = null)
+private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5, $status = null, $timezoneString = '+00:00')
 {
     $thirtyMinutesAgo = now()->subMinutes(30);
     $tenMinutesAgo = now()->subMinutes(10);
@@ -116,7 +126,7 @@ private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5
     ->get();
 
     // Then get latest activity for each user
-    $result = $users->map(function ($user) use ($thirtyMinutesAgo, $tenMinutesAgo, $threshold, $status) {
+    $result = $users->map(function ($user) use ($thirtyMinutesAgo, $tenMinutesAgo, $threshold, $status, $timezoneString) {
         // Get latest activity for this user
         $latestActivity = UserActivity::select([
             'user_activities.process_id',
@@ -169,6 +179,11 @@ private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5
             'profile_picture' => $user->profile_picture
         ]))->profile_picture;
 
+        $lastWorkingDatetime = null;
+        if (isset($latestActivity->created_at)) {
+            $lastWorkingDatetime = Carbon::parse($latestActivity->created_at)->setTimezone($timezoneString)->format('Y-m-d H:i:s');
+        }
+
         return [
             'user_id' => $user->user_id,
             'name' => $user->name,
@@ -177,7 +192,7 @@ private function getOnlineMembersUsageProductiveFilter($userId, $threshold = 0.5
             'profile_picture' => $profilePicture,
             'process_id' => $latestActivity->process_id ?? null,
             'process_type' => $latestActivity->process_type ?? null,
-            'last_working_datetime' => $latestActivity->created_at ?? null,
+            'last_working_datetime' => $lastWorkingDatetime,
             'status' => $onlineStatus,
             'productive_ratio' => round($productiveRatio, 2),
             'icon_url' => $iconUrl

@@ -513,15 +513,19 @@ class Helper
             $paypalSubscriptionId = $subscription->stripe_id;
 
             if ($subscription) {
-                $priceAmount = $subscription->stripe_price / config('app.unit_price');
+                $priceAmount = (float) $subscription->stripe_price / (float) config('app.unit_price');
                 $currency = '$';
-                $current_period_end = Carbon::parse($subscription->ends_at)->format('Y-m-d');
+                if ($subscription->name == 'LTD') {
+                    $current_period_end = Carbon::now()->addYears(10)->format('Y-m-d');
+                } else {
+                    $current_period_end = Carbon::parse($subscription->ends_at)->format('Y-m-d');
+                }
                 $current_period_start = Carbon::parse($subscription->created_at)->format('Y-m-d');
                 $totalAmount = $subscription->stripe_price;
             }
         } else {
             $priceAmount = config('app.unit_price');
-            $totalAmount = config('app.unit_price') * $teamMemberCount;
+            $totalAmount = (float) config('app.unit_price') * $teamMemberCount;
             $currency = '$';
             $current_period_end = $user->created_at;
             $current_period_start = $user->trial_ends_at;

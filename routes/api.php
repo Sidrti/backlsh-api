@@ -23,10 +23,11 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\V1\Website\ProjectProcessRuleController;
 use App\Http\Controllers\V1\Website\NotificationController;
 use App\Http\Controllers\V1\Website\IssuesController;
+use Illuminate\Support\Facades\DB;
 
 
-Route::prefix('v1')->group(function () { 
-    Route::group(['prefix' => 'website'], function () { 
+Route::prefix('v1')->group(function () {
+    Route::group(['prefix' => 'website'], function () {
         Route::post('/webhooks/lemonsqueezy', [LemonSqueezyWebhookController::class, 'handle']);
         Route::post('/auth/login', [AuthController::class, 'login']);
         Route::post('/auth/register-admin', [AuthController::class, 'registerAdmin']);
@@ -44,14 +45,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/payment/cancel', [PaymentController::class,'paymentCancel']);
     });
 
-    Route::group(['prefix' => 'app'], function () {  
+    Route::group(['prefix' => 'app'], function () {
         Route::post('/auth/login', [AuthController::class, 'login']);
         Route::post('/auth/google', [AuthController::class, 'verifyGoogleDesktopResponse']);
         Route::get('/fetch-total-time', [UserActivityController::class, 'getTotalTimeWorked']);
     });
-    
+
     Route::group(['middleware' => ['auth:sanctum']], function () {
-        Route::group(['prefix' => 'app'], function () { 
+        Route::group(['prefix' => 'app'], function () {
             Route::get('/user-activity/fetch-time', [UserActivityController::class, 'fetchUserTotalTimeInSeconds']);
             Route::post('/user-activity/create', [UserActivityController::class, 'createUserActivity']);
 
@@ -62,10 +63,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/projects', [ProjectController::class, 'index']);
             Route::get('/projects/{project}/tasks', [TaskController::class, 'indexByProject']);
         });
-        
+
         Route::group(['prefix' => 'website'], function () {
             Route::get('/auth/user', [AuthController::class, 'me']);
             Route::post('/auth/user/update', [AuthController::class, 'meUpdate']);
+            Route::post('/auth/user/settings', [AuthController::class, 'updateSettings']);
             Route::get('/auth/account-details', [AuthController::class, 'fetchUserAccountDetails']);
             Route::post('/auth/forget-password/change-password', [AuthController::class, 'forgetPasswordChangePassword']);
             Route::get('/auth/send-verification-link', [AuthController::class, 'sendVerificationLink']);
@@ -95,7 +97,7 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/productivity-ratings',[UserProcessRatingController::class,'fetchProcessRating']);
             Route::post('/productivity-ratings/create',[UserProcessRatingController::class,'createProcessRating']);
-            
+
             Route::post('/payment/checkout', [PaymentController::class,'createCheckout']);
             Route::get('/payment/billing-details', [PaymentController::class,'fetchBillingDetails']);
             Route::get('/payment/redirect-billing-portal', [PaymentController::class,'rediectToBilling']);
@@ -155,13 +157,13 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
-Route::prefix('v2')->group(function () { 
-    
+Route::prefix('v2')->group(function () {
+
     Route::group(['middleware' => ['auth:sanctum']], function () {
-        Route::group(['prefix' => 'app'], function () { 
+        Route::group(['prefix' => 'app'], function () {
             Route::post('/user-activity/create', [UserActivityControllerV2::class, 'createUserActivity']);
         });
-    
+
     });
 });
 ?>
