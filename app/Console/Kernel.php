@@ -15,7 +15,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        $schedule->command('report:daily-team')->everyThreeHours();
+        $schedule->command('report:daily-team')->hourly();
     }
 
     /**

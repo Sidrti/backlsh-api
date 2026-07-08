@@ -64,12 +64,17 @@ class ProcessResource extends Resource
                 TextColumn::make('type')
                     ->label('Type')
                     ->sortable(),
+
+                TextColumn::make('user_activities_count')
+                    ->label('Times Used')
+                    ->sortable(),
                 
                     
                 ImageColumn::make('icon')
                     ->square()
                     ->width(30),
             ])
+            ->defaultSort('user_activities_count', 'desc')
             ->filters([])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -77,6 +82,11 @@ class ProcessResource extends Resource
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make(),
             ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->withCount('userActivities');
     }
 
     public static function getRelations(): array
