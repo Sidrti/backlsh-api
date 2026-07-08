@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\Issue;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class SendDailyTeamReport extends Command
 {
@@ -35,44 +36,61 @@ class SendDailyTeamReport extends Command
      */
     public function handle()
     {
+        Log::info('SendDailyTeamReport: Starting command execution.');
+
         $owners = User::where('parent_user_id', 0)->get();
         $isForce = $this->option('force');
 
+        Log::info("SendDailyTeamReport: Found " . count($owners) . " owner users to process.");
+
         foreach ($owners as $owner) {
-            $settings = $owner->settings ?? [];
+            $settings = $owner->settings;
             if (is_string($settings)) {
                 $settings = json_decode($settings, true);
             }
-            
+            if (!is_array($settings)) {
+                $settings = [];
+            }
+
             $timezone = $settings['timezone'] ?? config('app.timezone', 'UTC');
             $reportTime = $settings['report_time'] ?? '17:00';
             $targetEmails = $settings['report_emails'] ?? [$owner->email];
-            
+
             if (!is_array($targetEmails)) {
                 $targetEmails = [$owner->email];
             }
-            
+
             $currentTime = Carbon::now()->setTimezone($timezone);
-            
-            if (!$isForce && $currentTime->format('H:i') !== $reportTime) {
+
+            $reportHour = explode(':', $reportTime)[0] ?? '17';
+            $currentHour = $currentTime->format('H');
+
+            Log::info("SendDailyTeamReport: Owner ID: {$owner->id} ({$owner->name}), Timezone: {$timezone}, Report Time: {$reportTime}, Target Emails: " . implode(', ', $targetEmails) . ", Current Time: " . $currentTime->format('Y-m-d H:i:s'));
+
+            if (!$isForce && (int)$currentHour !== (int)$reportHour) {
+                Log::info("SendDailyTeamReport: Skipping Owner ID {$owner->id} (Hour mismatch: current hour {$currentHour} !== report hour {$reportHour})");
                 continue;
             }
 
             // Since report runs at the end of the day, "today" in the owner's timezone is what we want
             $today = $currentTime->copy()->startOfDay();
-            
+            Log::info("SendDailyTeamReport: Running report for Owner ID {$owner->id} for date: " . $today->format('Y-m-d'));
+
             $teamMembers = User::where('parent_user_id', $owner->id)->orWhere('id', $owner->id)->get();
             if ($teamMembers->isEmpty()) {
+                Log::info("SendDailyTeamReport: Skipping Owner ID {$owner->id} (No team members found)");
                 continue;
             }
 
             $teamUserIds = $teamMembers->pluck('id')->toArray();
+            Log::info("SendDailyTeamReport: Found " . count($teamMembers) . " team members for Owner ID {$owner->id}");
 
             // Total Team Hours Tracked Today
             $totalTeamHoursSeconds = UserProductivitySummary::whereIn('user_id', $teamUserIds)
                 ->whereDate('date', $today)
                 ->sum('total_seconds');
             $totalTeamHours = Helper::convertSecondsInReadableFormat($totalTeamHoursSeconds);
+            Log::info("SendDailyTeamReport: Owner ID {$owner->id} total team hours: {$totalTeamHours} ({$totalTeamHoursSeconds} seconds)");
 
             $employeesData = [];
             foreach ($teamMembers as $employee) {
@@ -172,6 +190,8 @@ class SendDailyTeamReport extends Command
                 ];
             }
 
+            Log::info("SendDailyTeamReport: Owner ID {$owner->id} active projects count: " . count($projectsData));
+
             // Send email
             if ($totalTeamHoursSeconds > 0 || !empty($projectsData)) {
                 $subject = 'Daily Team Report - ' . $today->format('M d, Y');
@@ -190,12 +210,21 @@ class SendDailyTeamReport extends Command
                 $this->line($body);
                 $this->info("----- HTML OUTPUT END -----");
 
+                Log::info("SendDailyTeamReport: Sending report email to target emails: " . implode(', ', $targetEmails));
                 foreach ($targetEmails as $email) {
-                    Helper::sendEmail($email, $subject, $body, $owner->name);
+                    try {
+                        Helper::sendEmail($email, $subject, $body, $owner->name, 'siddhant@backlsh.in');
+                        Log::info("SendDailyTeamReport: Report email successfully sent to {$email} for Owner ID {$owner->id}");
+                    } catch (\Exception $e) {
+                        Log::error("SendDailyTeamReport: Failed to send email to {$email} for Owner ID {$owner->id}. Error: " . $e->getMessage());
+                    }
                 }
+            } else {
+                Log::info("SendDailyTeamReport: Skipping Owner ID {$owner->id} (No activity or active projects recorded today)");
             }
         }
 
+        Log::info('SendDailyTeamReport: Command execution completed.');
         return Command::SUCCESS;
     }
 }

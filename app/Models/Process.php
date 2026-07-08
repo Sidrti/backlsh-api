@@ -16,6 +16,11 @@ class Process extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function userActivities()
+    {
+        return $this->hasMany(UserActivity::class, 'process_id');
+    }
     // public function getIconAttribute($value)
     // {
     //     if (filter_var($value, FILTER_VALIDATE_URL)) {

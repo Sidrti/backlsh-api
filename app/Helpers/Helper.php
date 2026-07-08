@@ -102,7 +102,7 @@ class Helper
             }
         }
     }
-    public static function sendEmail($to, $subject, $body, $name = "Max")
+    public static function sendEmail($to, $subject, $body, $name = "Max", $fromEmail = "hi@backlsh.in")
     {
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
@@ -113,7 +113,7 @@ class Helper
 
         $sendSmtpEmail = new \SendinBlue\Client\Model\SendSmtpEmail([
             'subject' => $subject,
-            'sender' => ['name' => 'Jacquie', 'email' => 'hi@backlsh.in'],
+            'sender' => ['name' => 'Jamison', 'email' => $fromEmail],
             'replyTo' => ['name' => 'Support', 'email' => 'support@backlsh.com'],
             'to' => [['name' => $name, 'email' => $to]],
             'htmlContent' => $body,
@@ -121,11 +121,11 @@ class Helper
 
         try {
             $result = $apiInstance->sendTransacEmail($sendSmtpEmail);
+            Log::info("Email Sent Successful to: ".$to);
             return true;
         } catch (Exception $e) {
-
+            Log::info("Email Sent Failed to: ".$e->getMessage());
             return $e->getMessage();
-            echo $e->getMessage(), PHP_EOL;
         }
     }
 
