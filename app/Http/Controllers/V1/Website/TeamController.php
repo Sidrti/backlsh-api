@@ -149,7 +149,30 @@ class TeamController extends Controller
 
         // Check if the current user is the parent of the user being deleted
         if($user->parent_user_id == auth()->user()->id) {
-            $user->delete();
+            DB::transaction(function () use ($user) {
+                // 1. Detach many-to-many relationships
+                $user->attendanceSchedules()->detach();
+                $user->projects()->detach();
+
+                // 2. Reassign reported issues to the parent admin
+                DB::table('issues')->where('reported_by', $user->id)->update(['reported_by' => auth()->user()->id]);
+
+                // 3. Delete productivity ratings and screenshots
+                DB::table('productivity_ratings')->where('user_id', $user->id)->delete();
+                DB::table('user_screenshots')->where('user_id', $user->id)->delete();
+
+                // 4. Delete user activity dependencies (sub-activities first, then activities)
+                DB::table('user_sub_activities')
+                    ->whereIn('user_activity_id', function ($query) use ($user) {
+                        $query->select('id')->from('user_activities')->where('user_id', $user->id);
+                    })->delete();
+
+                DB::table('user_activities')->where('user_id', $user->id)->delete();
+
+                // 5. Delete the user
+                $user->delete();
+            });
+
             return response()->json(['status_code'=> 1,'message' => 'Member deleted successfully.'], 200);
         }
 

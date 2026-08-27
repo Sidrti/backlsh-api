@@ -4,7 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
-use App\AttendanceSchedule;
+use App\Models\AttendanceSchedule;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -36,8 +36,9 @@ class User extends Authenticatable
         'pm_last_four',
         'is_verified',
         'verification_token',
-        'teams_webhook_url'
-
+        'teams_webhook_url',
+        'mobile',
+        'country_code'
     ];
 
     /**
@@ -131,4 +132,25 @@ class User extends Authenticatable
         return $this->hasOne(UserActivity::class)->latestOfMany('start_datetime');
     }
 
+    public static function getInstallsData()
+    {
+        $results = \Illuminate\Support\Facades\DB::table('user_activities as ua')
+            ->join('processes as p', 'p.id', '=', 'ua.process_id')
+            ->select(
+                'ua.user_id', 
+                \Illuminate\Support\Facades\DB::raw('MIN(ua.start_datetime) as installed_at'),
+                \Illuminate\Support\Facades\DB::raw("IF(SUM(CASE WHEN p.process_name LIKE '%.exe' OR p.process_name IN ('explorer', 'lockapp', 'taskmgr', 'winword', 'windowsterminal', 'notepad') THEN 1 ELSE 0 END) > 0, 'windows', 'mac') as platform")
+            )
+            ->where('p.type', 'APPLICATION')
+            ->groupBy('ua.user_id')
+            ->get();
+
+        return collect($results)->map(function ($row) {
+            return (object) [
+                'user_id' => $row->user_id,
+                'installed_at' => \Carbon\Carbon::parse($row->installed_at),
+                'platform' => $row->platform,
+            ];
+        });
+    }
 }
