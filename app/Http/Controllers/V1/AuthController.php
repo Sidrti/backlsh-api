@@ -45,11 +45,22 @@ class AuthController extends Controller
             'name' => 'required',
             'email' => 'required|email',
             'password' => 'required|min:6',
+            'mobile' => 'required|string|min:6|max:15',
+            'country_code' => 'required|string',
         ]);
 
         $user = User::where('email', $request->input('email'))->first();
         if(!$user) {
-            $user = Helper::createNewUser($request->input('name'),$request->input('email'),$request->input('password'),1,'ADMIN');
+            $user = Helper::createNewUser(
+                $request->input('name'),
+                $request->input('email'),
+                $request->input('password'),
+                1,
+                'ADMIN',
+                0,
+                $request->input('mobile'),
+                $request->input('country_code')
+            );
             $message = 'Your account has been created !';
             $token = $user->createToken('api-token')->plainTextToken;
 
@@ -386,11 +397,24 @@ class AuthController extends Controller
     }
     public function fetchBacklshAppUrl(Request $request)
     {
+        $os = 'windows';
         if($request->has('os') && $request->os == 'mac') {
+            $os = 'mac';
             $filePath = config('app.mac_app_setup_link');
-            return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
+        } else {
+            $filePath = config('app.app_setup_link');
         }
-        $filePath = config('app.app_setup_link');
+
+        try {
+            \Illuminate\Support\Facades\DB::table('downloads')->insert([
+                'os' => $os,
+                'created_date_time' => now(),
+                'updated_datetime' => now(),
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to log download: " . $e->getMessage());
+        }
+
         return response()->json(['status_code' => 1,'data' => ['url' => $filePath ]]);
     }
 

@@ -40,7 +40,7 @@ class DashboardController extends Controller
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
                 return response()->json(config('dummy.top_members'));
             }
-            $topMembers = $this->getTopMostProductiveMembers($userId, $request->input('top_member_days', 1));
+            $topMembers = $this->getTopMostWorkingMembers($userId, $request->input('top_member_days', 1));
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_members' => $topMembers]]);
         }
 
@@ -70,7 +70,7 @@ class DashboardController extends Controller
 
         $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
         $todayTeamAttendance = $this->getTeamAttendanceToday($teamUserIds);
-        $topMembers = $this->getTopMostProductiveMembers($userId, 1);
+        $topMembers = $this->getTopMostWorkingMembers($userId, 1);
 
         $totalMembersInTeam = count($teamUserIds);
         $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
@@ -387,7 +387,7 @@ class DashboardController extends Controller
     //     //     'members' => $topMembers
     //     // ];
     // }
-private function getTopMostProductiveMembers($userId, $days = 1)
+private function getTopMostWorkingMembers($userId, $days = 1)
 {
     $endDate = Carbon::today();
     $startDate = Carbon::today()->subDays($days - 1);
@@ -419,12 +419,14 @@ private function getTopMostProductiveMembers($userId, $days = 1)
             'users.email',
             'users.profile_picture',
             DB::raw('SUM(productive_seconds) as total_productive_seconds'),
+            DB::raw('SUM(nonproductive_seconds) as total_nonproductive_seconds'),
+            DB::raw('SUM(neutral_seconds) as total_neutral_seconds'),
             DB::raw('SUM(total_seconds) as total_logged_seconds'),
             // VALUE SCORE CALCULATION
-            // We calculate how much of a "Full Productive Week" they achieved
+            // We calculate how much of standard workable hours they logged
             DB::raw("
                 ROUND(
-                    (SUM(productive_seconds) / $standardWorkSeconds) * 100,
+                    (SUM(total_seconds) / $standardWorkSeconds) * 100,
                 2) as value_score
             ")
         )
@@ -440,17 +442,39 @@ private function getTopMostProductiveMembers($userId, $days = 1)
         ->limit(5)
         ->get();
 
-    $topMembers->transform(function ($member) {
-        $member->productivity_percent = round(($member->total_productive_seconds / $member->total_logged_seconds) * 100, 2);
-        $member->productive_time = Helper::convertSecondsInReadableFormat($member->total_productive_seconds);
+    // Calculate total logged seconds for the team during this period
+    $totalTeamLoggedSeconds = DB::table('user_productivity_summaries')
+        ->join('users', 'users.id', '=', 'user_productivity_summaries.user_id')
+        ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+        ->where(function ($query) use ($userId) {
+            $query->where('users.parent_user_id', $userId)
+                ->orWhere('users.id', $userId);
+        })
+        ->sum('total_seconds') ?: 1;
+
+    $topMembers->transform(function ($member) use ($totalTeamLoggedSeconds) {
+        $totalLogged = $member->total_logged_seconds ?: 1;
+
+        $member->productive_percent = round(($member->total_productive_seconds / $totalLogged) * 100, 2);
+        $member->neutral_percent = round(($member->total_neutral_seconds / $totalLogged) * 100, 2);
+        $member->unproductive_percent = round(($member->total_nonproductive_seconds / $totalLogged) * 100, 2);
+
         $member->total_time = Helper::convertSecondsInReadableFormat($member->total_logged_seconds);
+        $member->contribution_percent = round(($member->total_logged_seconds / $totalTeamLoggedSeconds) * 100, 1);
         
+        $member->productive_time = Helper::convertSecondsInReadableFormat($member->total_productive_seconds);
+        $member->neutral_time = Helper::convertSecondsInReadableFormat($member->total_neutral_seconds);
+        $member->unproductive_time = Helper::convertSecondsInReadableFormat($member->total_nonproductive_seconds);
+
         // Use the exact User model logic for profile picture
         $member->profile_picture = (new User(['profile_picture' => $member->profile_picture]))->profile_picture;
 
-        // Updated Label Logic
-        $member->status = $this->getValueLabel($member->value_score);
-        
+        // Clean up keys not used in the frontend
+        unset($member->total_productive_seconds);
+        unset($member->total_nonproductive_seconds);
+        unset($member->total_neutral_seconds);
+        unset($member->total_logged_seconds);
+
         return $member;
     });
 

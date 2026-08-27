@@ -483,7 +483,7 @@ class Helper
 
         return $onlineMembersCount;
     }
-    public static function createNewUser($name, $email, $password, $loginType, $role, $parentId = 0)  //loginType - 1 (Normal),  2 - Google,  3 - linkedin
+    public static function createNewUser($name, $email, $password, $loginType, $role, $parentId = 0, $mobile = null, $countryCode = null)  //loginType - 1 (Normal),  2 - Google,  3 - linkedin
     {
         $randomSeed = uniqid();
         $style = 'avataaars'; // You can change style
@@ -500,6 +500,8 @@ class Helper
             'parent_user_id' => $parentId,
             'trial_ends_at' => now()->addDays(14),
             'profile_picture' => $avatarUrl,
+            'mobile' => $mobile,
+            'country_code' => $countryCode,
         ]);
 
         return $user;
@@ -575,6 +577,9 @@ class Helper
         $minutes = floor(($totalSeconds % 3600) / 60);
 
         $formattedTime = '';
+        if ($totalSeconds <= 0) {
+            return "0m";
+        }
         if($totalSeconds < 60){
             return "{$totalSeconds}s";
         }
@@ -630,7 +635,10 @@ class Helper
                 'productive_time' => Helper::convertSecondsInReadableFormat($summary->productive_seconds),
                 'nonproductive_time' => Helper::convertSecondsInReadableFormat($summary->nonproductive_seconds),
                 'neutral_time' => Helper::convertSecondsInReadableFormat($summary->neutral_seconds),
-                'total_time' => Helper::convertSecondsInReadableFormat($summary->total_seconds)
+                'total_time' => Helper::convertSecondsInReadableFormat($summary->total_seconds),
+                'productive_hours' => round($summary->productive_seconds / 3600, 2),
+                'nonproductive_hours' => round($summary->nonproductive_seconds / 3600, 2),
+                'neutral_hours' => round($summary->neutral_seconds / 3600, 2)
             ];
         }
 
@@ -658,7 +666,10 @@ class Helper
                     'productive_time' => '0m',
                     'nonproductive_time' => '0m',
                     'neutral_time' => '0m',
-                    'total_time' => '0m'
+                    'total_time' => '0m',
+                    'productive_hours' => 0,
+                    'nonproductive_hours' => 0,
+                    'neutral_hours' => 0
                 ];
             }
 

@@ -30,9 +30,9 @@ return [
             "today_online_member_count" => 3,
             "today_team_attendance" => 4,
             "top_members" => [
-                ["user_id" => 0, "name" => "Alice Demo", "productive_time" => "6h 15m", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "total_time" => "8h 30m", "productivity_percent" => 74],
-                ["user_id" => 0, "name" => "Bob Demo", "productive_time" => "5h 30m", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "total_time" => "6h 10m", "productivity_percent" => 50],
-                ["user_id" => 0, "name" => "Charlie Demo", "productive_time" => "4h 50m", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "total_time" => "3h 5m", "productivity_percent" => 20],
+                ["user_id" => 0, "name" => "Alice Demo", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "value_score" => 74, "total_time" => "8h 30m", "contribution_percent" => 35, "productive_percent" => 74, "neutral_percent" => 16, "unproductive_percent" => 10, "productive_time" => "6h 17m", "neutral_time" => "1h 21m", "unproductive_time" => "52m"],
+                ["user_id" => 0, "name" => "Bob Demo", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "value_score" => 50, "total_time" => "6h 10m", "contribution_percent" => 25, "productive_percent" => 50, "neutral_percent" => 30, "unproductive_percent" => 20, "productive_time" => "3h 5m", "neutral_time" => "1h 51m", "unproductive_time" => "1h 14m"],
+                ["user_id" => 0, "name" => "Charlie Demo", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "value_score" => 20, "total_time" => "3h 5m", "contribution_percent" => 15, "productive_percent" => 20, "neutral_percent" => 40, "unproductive_percent" => 40, "productive_time" => "37m", "neutral_time" => "1h 14m", "unproductive_time" => "1h 14m"],
             ],
             "total_members" => 6,
             "week_productivity_percent" => [
@@ -343,9 +343,9 @@ return [
         "dummy" => "true",
         "status_code" => 1,
         "data" => [
-            ["user_id" => 0, "name" => "Alice Demo", "productive_time" => "6h 15m", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "total_time" => "8h 30m", "productivity_percent" => 74],
-            ["user_id" => 0, "name" => "Bob Demo", "productive_time" => "5h 30m", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "total_time" => "6h 10m", "productivity_percent" => 50],
-            ["user_id" => 0, "name" => "Charlie Demo", "productive_time" => "4h 50m", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "total_time" => "3h 5m", "productivity_percent" => 20],
+            ["user_id" => 0, "name" => "Alice Demo", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "value_score" => 74, "total_time" => "8h 30m", "contribution_percent" => 35, "productive_percent" => 74, "neutral_percent" => 16, "unproductive_percent" => 10, "productive_time" => "6h 17m", "neutral_time" => "1h 21m", "unproductive_time" => "52m"],
+            ["user_id" => 0, "name" => "Bob Demo", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "value_score" => 50, "total_time" => "6h 10m", "contribution_percent" => 25, "productive_percent" => 50, "neutral_percent" => 30, "unproductive_percent" => 20, "productive_time" => "3h 5m", "neutral_time" => "1h 51m", "unproductive_time" => "1h 14m"],
+            ["user_id" => 0, "name" => "Charlie Demo", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "value_score" => 20, "total_time" => "3h 5m", "contribution_percent" => 15, "productive_percent" => 20, "neutral_percent" => 40, "unproductive_percent" => 40, "productive_time" => "37m", "neutral_time" => "1h 14m", "unproductive_time" => "1h 14m"],
         ],
     ],
     "report" => [
