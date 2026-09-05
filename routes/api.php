@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\V1\Website\ProjectProcessRuleController;
 use App\Http\Controllers\V1\Website\NotificationController;
+use App\Http\Controllers\V1\Website\RecognitionController;
 use App\Http\Controllers\V1\Website\IssuesController;
 use Illuminate\Support\Facades\DB;
 
@@ -90,6 +91,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/team-member/bulk-create',[TeamController::class,'createTeamMemberBulkAdd']);
             Route::get('/team-member/sample-file-url', [TeamController::class, 'fetchSampleCsvUrl']);
             Route::post('/team-member/update-stealth-mode',[TeamController::class,'updateStealthMode']);
+            Route::post('/team-member/update-role', [TeamController::class, 'updateTeamMemberRole']);
             Route::delete('/team-member/delete/{userId}', [TeamController::class, 'deleteTeamMember']);
 
             Route::get('/attendance',[AttendanceController::class,'fetchAttendance']);
@@ -153,6 +155,11 @@ Route::prefix('v1')->group(function () {
             Route::post('/issues/{issue}', [IssuesController::class, 'update']);
             Route::delete('/issues/{issue}', [IssuesController::class, 'destroy']);
             Route::post('/issues/update/bulk', [IssuesController::class, 'bulkUpdate']);
+
+            // Recognition Routes
+            Route::post('/recognitions', [RecognitionController::class, 'store']);
+            Route::get('/recognitions/received', [RecognitionController::class, 'received']);
+            Route::get('/recognitions/stats', [RecognitionController::class, 'userStats']);
 
         });
     });

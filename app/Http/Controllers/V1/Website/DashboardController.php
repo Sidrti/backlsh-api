@@ -26,9 +26,9 @@ class DashboardController extends Controller
     {
         $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
         $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
-        $userId = auth()->user()->id;
-        $teamUserIds = User::where('parent_user_id', $userId)
-            ->orWhere('id', $userId)
+        $adminId = auth()->user()->getAdminId();
+        $teamUserIds = User::where('parent_user_id', $adminId)
+            ->orWhere('id', $adminId)
             ->pluck('id');
 
         $topMemberRequestOnly = $request->input('top_member_req_only', false);
@@ -40,7 +40,7 @@ class DashboardController extends Controller
             if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
                 return response()->json(config('dummy.top_members'));
             }
-            $topMembers = $this->getTopMostWorkingMembers($userId, $request->input('top_member_days', 1));
+            $topMembers = $this->getTopMostWorkingMembers($adminId, $request->input('top_member_days', 1));
             return response()->json(['dummy'=> false, 'status_code' => 1, 'data' => ['top_members' => $topMembers]]);
         }
 
@@ -66,16 +66,16 @@ class DashboardController extends Controller
         $totalNonProductiveHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'NONPRODUCTIVE');
         $totalNeutralHours = Helper::calculateTotalHoursByParentId($teamUserIds, $startDate, $endDate, 'NEUTRAL');
 
-        $teamWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($userId, $startDate, $endDate, true);
+        $teamWorkingTrend = $this->getProductiveNonProductiveTimeByEachDay($adminId, $startDate, $endDate, true);
 
-        $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
+        $todayOnlineMemberCount = Helper::getMembersOnlineCount($adminId);
         $todayTeamAttendance = $this->getTeamAttendanceToday($teamUserIds);
-        $topMembers = $this->getTopMostWorkingMembers($userId, 1);
+        $topMembers = $this->getTopMostWorkingMembers($adminId, 1);
 
         $totalMembersInTeam = count($teamUserIds);
         $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
         $activeProjectsList = Helper::getActiveProjectsForTeam($teamUserIds, $startDate, $endDate);
-        $projectOverdue = Helper::getProjectCountByStatus($userId,'OVERDUE',$teamUserIds);
+        $projectOverdue = Helper::getProjectCountByStatus($adminId,'OVERDUE',$teamUserIds);
         $topEmployeesMonthlyTrend = $this->getTopEmployeesMonthlyTrend($teamUserIds);
 
         if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
@@ -561,9 +561,9 @@ private function getTopMostWorkingMembers($userId, $days = 1)
     }
     public function fetchAdminProductivityTips()
     {
-        $userId = auth()->user()->id;
+        $adminId = auth()->user()->getAdminId();
 
-        $productivityTip = ProductivityTip::where('user_id', $userId)
+        $productivityTip = ProductivityTip::where('user_id', $adminId)
             ->where('admin', true)
             ->orderBy('created_at', 'desc')
             ->first();
@@ -578,7 +578,7 @@ private function getTopMostWorkingMembers($userId, $days = 1)
         }
 
         // Prepare optimized data for AI
-        $analysisData = $this->prepareAiAnalysisData($userId);
+        $analysisData = $this->prepareAiAnalysisData($adminId);
         try {
             $prompt = $this->generateAiPrompt($analysisData);
             $response = $this->chatGptService->askChatGpt($prompt);
@@ -586,7 +586,7 @@ private function getTopMostWorkingMembers($userId, $days = 1)
 
             // Store the new tip
             $newTip = ProductivityTip::create([
-                'user_id' => $userId,
+                'user_id' => $adminId,
                 'tip' => $formatedResponse,
                 'admin' => true,
             ]);

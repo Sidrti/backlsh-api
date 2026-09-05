@@ -26,16 +26,16 @@ class TeamController extends Controller
         $request->validate([
             'name' => 'required|string',
             'email' =>'required|email',
+            'role' => 'nullable|string|in:MEMBER,SUBADMIN,member,subadmin'
         ]);
 
         $user = User::where('email', $request->input('email'))->first();
 
         if (!$user) {
-           // $parentUser = User::find(auth()->user()->id);
-          //  $subscription = $parentUser->subscriptions()->first();
-           // $teamMemberCount = User::where('parent_user_id',$parentUser->id)->count() + 1;
-         //   $this->paypalSubscriptionService->updateQuantity($subscription->stripe_id,$teamMemberCount);
-            return $this->inviteNewTeamMember($request->input('name'), $request->input('email'));
+            $roleInput = strtoupper($request->input('role', 'MEMBER'));
+            $role = in_array($roleInput, ['MEMBER', 'SUBADMIN']) ? $roleInput : 'MEMBER';
+
+            return $this->inviteNewTeamMember($request->input('name'), $request->input('email'), $role);
         } else {
             return $this->handleExistingTeamMember($user);
         }
@@ -59,7 +59,7 @@ class TeamController extends Controller
                  if (isset($email) && isset($name) && filter_var($email, FILTER_VALIDATE_EMAIL) && $name != null) {
                     $user = User::where('email', $email)->first();
                     if (!$user) {
-                        $this->inviteNewTeamMember($name,$email);
+                        $this->inviteNewTeamMember($name, $email, 'MEMBER');
                         $memberInvitedCount++;
                     }
                     else {
@@ -80,15 +80,15 @@ class TeamController extends Controller
     public function fetchTeamMembers(Request $request)
     {
         $currentDate = Carbon::now();
-        $userId = auth()->user()->id;
+        $adminId = auth()->user()->getAdminId();
         $tenDaysAgo = $currentDate->copy()->subDays(10)->toDateString();
 
         // Fetch team members along with their activity status
         $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
             ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
-             ->where(function ($query) use ($userId) {
-                $query->where('users.parent_user_id', $userId)
-                      ->orWhere('users.id', $userId);
+             ->where(function ($query) use ($adminId) {
+                $query->where('users.parent_user_id', $adminId)
+                      ->orWhere('users.id', $adminId);
                 })
             ->groupBy('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
             ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
@@ -132,8 +132,9 @@ class TeamController extends Controller
 
         // Find the user
         $user = User::findOrFail($request->input('user_id'));
+        $adminId = auth()->user()->getAdminId();
 
-        if($user->parent_user_id == auth()->user()->id || $user->id == auth()->user()->id) {
+        if($user->parent_user_id == $adminId || $user->id == $adminId || $user->id == auth()->user()->id) {
             $user->stealth_mode = $request->input('stealth_mode');
             $user->save();
 
@@ -142,20 +143,81 @@ class TeamController extends Controller
         return response()->json(['status_code'=> 2,'message' => 'Stealth mode not updated'], 200);
     }
 
+    public function updateTeamMemberRole(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'role' => 'required|string|in:MEMBER,SUBADMIN,member,subadmin',
+        ]);
+
+        $user = User::findOrFail($request->input('user_id'));
+        $currentUser = auth()->user();
+        $adminId = $currentUser->getAdminId();
+
+        // The primary admin role cannot be modified
+        if ($user->isAdmin() || $user->id == $adminId) {
+            return response()->json(['status_code' => 2, 'message' => 'The primary admin role cannot be modified.'], 403);
+        }
+
+        // Only Admin or Subadmin can update roles
+        if (!$currentUser->isAdminOrSubAdmin()) {
+            return response()->json(['status_code' => 2, 'message' => 'You do not have permission to update member roles.'], 403);
+        }
+
+        // User cannot change their own role
+        if ($user->id == $currentUser->id) {
+            return response()->json(['status_code' => 2, 'message' => 'You cannot change your own role.'], 403);
+        }
+
+        // Must belong to the current team
+        if ($user->parent_user_id != $adminId) {
+            return response()->json(['status_code' => 2, 'message' => 'User does not belong to your team.'], 403);
+        }
+
+        $user->role = strtoupper($request->input('role'));
+        $user->save();
+
+        return response()->json([
+            'status_code' => 1,
+            'message' => 'Role updated successfully.',
+            'data' => [
+                'id' => $user->id,
+                'role' => $user->role,
+            ],
+        ], 200);
+    }
+
     public function deleteTeamMember($userId)
     {
         // Find the user
         $user = User::findOrFail($userId);
+        $currentUser = auth()->user();
+        $adminId = $currentUser->getAdminId();
 
-        // Check if the current user is the parent of the user being deleted
-        if($user->parent_user_id == auth()->user()->id) {
-            DB::transaction(function () use ($user) {
+        // Cannot delete primary admin
+        if ($user->isAdmin() || $user->id == $adminId) {
+            return response()->json(['status_code'=> 2,'message' => 'The primary admin cannot be deleted.'], 403);
+        }
+
+        // Only Admin or Subadmin can delete team members
+        if (!$currentUser->isAdminOrSubAdmin()) {
+            return response()->json(['status_code'=> 2,'message' => 'You do not have permission to delete members.'], 403);
+        }
+
+        // Subadmin cannot delete other Subadmins or Admin
+        if ($currentUser->isSubAdmin() && ($user->isSubAdmin() || $user->isAdmin())) {
+            return response()->json(['status_code'=> 2,'message' => 'Subadmins cannot delete other subadmins or admins.'], 403);
+        }
+
+        // Check if the user belongs to the current organization/admin
+        if($user->parent_user_id == $adminId) {
+            DB::transaction(function () use ($user, $adminId) {
                 // 1. Detach many-to-many relationships
                 $user->attendanceSchedules()->detach();
                 $user->projects()->detach();
 
-                // 2. Reassign reported issues to the parent admin
-                DB::table('issues')->where('reported_by', $user->id)->update(['reported_by' => auth()->user()->id]);
+                // 2. Reassign reported issues to the admin
+                DB::table('issues')->where('reported_by', $user->id)->update(['reported_by' => $adminId]);
 
                 // 3. Delete productivity ratings and screenshots
                 DB::table('productivity_ratings')->where('user_id', $user->id)->delete();
@@ -179,10 +241,11 @@ class TeamController extends Controller
         return response()->json(['status_code'=> 2,'message' => 'You do not have permission to delete this member.'], 403);
     }
 
-    private function inviteNewTeamMember($name, $email)
+    private function inviteNewTeamMember($name, $email, $role = 'MEMBER')
     {
         $password = rand(100000, 9999999);
-        Helper::createNewUser($name, $email, $password, 1, 'MEMBER', auth()->user()->id);
+        $adminId = auth()->user()->getAdminId();
+        Helper::createNewUser($name, $email, $password, 1, $role, $adminId);
 
         $data = [
             'name' => $name,
@@ -203,10 +266,11 @@ class TeamController extends Controller
 
     private function handleExistingTeamMember($user)
     {
-        if ($user->parent_user_id == auth()->user()->id) {
+        $adminId = auth()->user()->getAdminId();
+        if ($user->parent_user_id == $adminId) {
             $message = $user->email . ' is already a member in your team';
         } else {
-            $message = $user->email . ' is a member of the admin. Kindly register another email for this member';
+            $message = $user->email . ' is a member of another team. Kindly register another email for this member';
         }
 
         return response()->json([

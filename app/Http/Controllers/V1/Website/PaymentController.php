@@ -26,6 +26,13 @@ public function createCheckout(Request $request)
 {
     $user = auth()->user();
 
+    if (!$user->isAdmin()) {
+        return response()->json([
+            'status_code' => 2,
+            'message' => 'Access denied. Only the account admin can manage billing and checkout.'
+        ], 403);
+    }
+
     // Count team members including the user themselves
     $teamMembersCount = User::where(function ($query) use ($user) {
         $query->where('users.parent_user_id', $user->id)
@@ -214,7 +221,15 @@ public function createCheckout(Request $request)
     // }
     public function fetchBillingDetails(Request $request)
     {
-        $subscription = (Helper::getUserSubscription(auth()->user()->id));
+        $user = auth()->user();
+        if (!$user->isAdmin()) {
+            return response()->json([
+                'status_code' => 2,
+                'message' => 'Access denied. Only the account admin can view billing details.'
+            ], 403);
+        }
+
+        $subscription = (Helper::getUserSubscription($user->id));
         $data = [
             'status_code' => 1,
             'data' => [
@@ -227,6 +242,13 @@ public function createCheckout(Request $request)
     }
     public function rediectToBilling(Request $request)
     {
+        $user = auth()->user();
+        if (!$user->isAdmin()) {
+            return response()->json([
+                'status_code' => 2,
+                'message' => 'Access denied. Only the account admin can access billing portal.'
+            ], 403);
+        }
         //return auth()->user()->redirectToBillingPortal('http://127.0.0.1:8000');
     }
     // public function handleWebhook(Request $request)

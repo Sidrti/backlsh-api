@@ -24,31 +24,31 @@ class RealtimeController extends Controller
         $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
         $timezoneString = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
 
-        $userId = auth()->user()->id;
-        $teamUserIds = User::where('parent_user_id', $userId)
-            ->orWhere('id', $userId)
+        $adminId = auth()->user()->getAdminId();
+        $teamUserIds = User::where('parent_user_id', $adminId)
+            ->orWhere('id', $adminId)
             ->pluck('id');
         if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
             return response()->json(config('dummy.realtime'));
         }
-        $todayOnlineMemberCount = Helper::getMembersOnlineCount($userId);
+        $todayOnlineMemberCount = Helper::getMembersOnlineCount($adminId);
         if ($request->has('filter')) {
             if ($request->filter == 'PRODUCTIVE_FROM_30_MIN') {
-                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, 'PRODUCTIVE', $timezoneString);
+                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($adminId, 0.5, 'PRODUCTIVE', $timezoneString);
             } else {
-                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, 'UNPRODUCTIVE', $timezoneString);
+                $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($adminId, 0.5, 'UNPRODUCTIVE', $timezoneString);
             }
         } else {
             $tenMinutesAgo = Carbon::now()->subMinutes(10);
-            $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($userId, 0.5, null, $timezoneString);
+            $realtimeUpdates = $this->getOnlineMembersUsageProductiveFilter($adminId, 0.5, null, $timezoneString);
         }
 
-        $nonProductiveUserCount = $this->countNonProductiveUsers($userId);
+        $nonProductiveUserCount = $this->countNonProductiveUsers($adminId);
         $todayTime = Carbon::today();
         $membersPresentToday = Helper::getTodaysAttendanceCount(
-            User::where(function ($query) use ($userId) {
-                $query->where('parent_user_id', $userId)
-                    ->orWhere('id', $userId);
+            User::where(function ($query) use ($adminId) {
+                $query->where('parent_user_id', $adminId)
+                    ->orWhere('id', $adminId);
             })->pluck('id')->toArray()
         );
 
