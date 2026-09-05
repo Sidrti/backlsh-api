@@ -122,6 +122,28 @@ class User extends Authenticatable
         return $subscription !== null;
     }
 
+    public function getAdminId(): int
+    {
+        return ($this->parent_user_id == 0 || empty($this->parent_user_id))
+            ? (int) $this->id
+            : (int) $this->parent_user_id;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'ADMIN';
+    }
+
+    public function isSubAdmin(): bool
+    {
+        return $this->role === 'SUBADMIN';
+    }
+
+    public function isAdminOrSubAdmin(): bool
+    {
+        return $this->isAdmin() || $this->isSubAdmin();
+    }
+
     public function subUsers()
     {
         return $this->hasMany(User::class, 'parent_user_id');

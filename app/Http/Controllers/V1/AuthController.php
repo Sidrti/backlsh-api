@@ -325,12 +325,13 @@ class AuthController extends Controller
     public function fetchUserAccountDetails()
     {
         $user = auth()->user();
-        $subscription = Helper::getUserSubscription(auth()->user()->id);
+        $adminId = $user->getAdminId();
+        $subscription = Helper::getUserSubscription($adminId);
       	$ifSubscribed = $subscription['subscribed'] ? true : false;
         $userSteps = $this->getUserCompletedSteps($user, $ifSubscribed);
         $subscription['sub_title'] = $ifSubscribed? 'Premium Member' : 'left in your trial';
         $subscription['title'] = $ifSubscribed ? 'Subscribed' : $subscription['remaining_trial_days'].' Days';
-        $subscription['show_button'] = !$ifSubscribed;
+        $subscription['show_button'] = $user->isAdmin() ? !$ifSubscribed : false;
         $subscription['button_text'] = 'UPGRADE NOW';
         $subscription['button_link'] = '/dashboard';
         $data = [

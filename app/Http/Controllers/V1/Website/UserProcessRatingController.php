@@ -18,9 +18,9 @@ class UserProcessRatingController extends Controller
             'rating' => 'required|in:PRODUCTIVE,NONPRODUCTIVE,NEUTRAL',
         ]);
 
-        $userId = auth()->user()->id;
-        // Check if a rating for the user and process already exists
-        $existingRating = UserProcessRating::where('user_id', $userId)
+        $adminId = auth()->user()->getAdminId();
+        // Check if a rating for the admin and process already exists
+        $existingRating = UserProcessRating::where('user_id', $adminId)
             ->where('process_id', $request->input('process_id'))
             ->first();
 
@@ -37,7 +37,7 @@ class UserProcessRatingController extends Controller
         } else {
             // If no rating exists, create a new rating entry
             $userProcessRating = new UserProcessRating();
-            $userProcessRating->user_id = $userId;
+            $userProcessRating->user_id = $adminId;
             $userProcessRating->process_id = $request->input('process_id');
             $userProcessRating->rating = $request->input('rating');
             $userProcessRating->save();
@@ -54,11 +54,9 @@ public function fetchProcessRating(Request $request)
     $searchQuery = $request->get('search');
     $processType = $request->get('process_type', 'app'); // Default to 'app'
     $currentUser = auth()->user();
-    $teamUserIds = User::where('id', $currentUser->id)
-        ->orWhere('parent_user_id', $currentUser->id)
-        ->when($currentUser->parent_user_id, function ($query) use ($currentUser) {
-            return $query->orWhere('parent_user_id', $currentUser->parent_user_id);
-        })
+    $adminId = $currentUser->getAdminId();
+    $teamUserIds = User::where('parent_user_id', $adminId)
+        ->orWhere('id', $adminId)
         ->pluck('id');
 
     if ($processType === 'app') {
@@ -67,9 +65,9 @@ public function fetchProcessRating(Request $request)
             $join->on('processes.id', '=', 'user_activities.process_id')
                 ->whereIn('user_activities.user_id', $teamUserIds);
         })
-            ->leftJoin('user_process_ratings', function ($join) use ($currentUser) {
+            ->leftJoin('user_process_ratings', function ($join) use ($adminId) {
                 $join->on('user_process_ratings.process_id', '=', 'processes.id')
-                    ->where('user_process_ratings.user_id', '=', $currentUser->id);
+                    ->where('user_process_ratings.user_id', '=', $adminId);
             })
             ->select(
                 'processes.id',
@@ -95,9 +93,9 @@ public function fetchProcessRating(Request $request)
         $query = DB::table('user_sub_activities')
             ->join('user_activities', 'user_sub_activities.user_activity_id', '=', 'user_activities.id')
             ->join('processes', 'user_sub_activities.process_id', '=', 'processes.id')
-            ->leftJoin('user_process_ratings', function ($join) use ($currentUser) {
+            ->leftJoin('user_process_ratings', function ($join) use ($adminId) {
                 $join->on('user_process_ratings.process_id', '=', 'user_sub_activities.process_id')
-                    ->where('user_process_ratings.user_id', '=', $currentUser->id);
+                    ->where('user_process_ratings.user_id', '=', $adminId);
             })
             ->whereIn('user_activities.user_id', $teamUserIds)
             ->select(

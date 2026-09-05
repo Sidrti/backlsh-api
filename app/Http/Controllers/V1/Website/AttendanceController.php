@@ -53,11 +53,11 @@ class AttendanceController extends Controller
         $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
         $timezoneString = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
 
-        $userId = auth()->user()->id;
+        $adminId = auth()->user()->getAdminId();
 
-        $teamMembers = User::where(function ($query) use ($userId) {
-            $query->where('users.parent_user_id', $userId)
-                  ->orWhere('users.id', $userId);
+        $teamMembers = User::where(function ($query) use ($adminId) {
+            $query->where('users.parent_user_id', $adminId)
+                  ->orWhere('users.id', $adminId);
         })->get();
 
         $attendanceRecords = [];
