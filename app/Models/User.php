@@ -144,6 +144,11 @@ class User extends Authenticatable
         return $this->isAdmin() || $this->isSubAdmin();
     }
 
+    public function isMember(): bool
+    {
+        return $this->role === 'MEMBER';
+    }
+
     public function subUsers()
     {
         return $this->hasMany(User::class, 'parent_user_id');

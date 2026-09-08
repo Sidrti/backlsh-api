@@ -13,6 +13,10 @@ class UserProcessRatingController extends Controller
 {
     public function createProcessRating(Request $request)
     {
+        if (!auth()->user()->isAdminOrSubAdmin()) {
+            return response()->json(['status_code' => 0, 'message' => 'Unauthorized action.'], 403);
+        }
+
         $request->validate([
             'process_id' => 'required|exists:processes,id',
             'rating' => 'required|in:PRODUCTIVE,NONPRODUCTIVE,NEUTRAL',

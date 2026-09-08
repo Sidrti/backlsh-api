@@ -30,9 +30,9 @@ return [
             "today_online_member_count" => 3,
             "today_team_attendance" => 4,
             "top_members" => [
-                ["user_id" => 0, "name" => "Alice Demo", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "value_score" => 74, "total_time" => "8h 30m", "contribution_percent" => 35, "productive_percent" => 74, "neutral_percent" => 16, "unproductive_percent" => 10, "productive_time" => "6h 17m", "neutral_time" => "1h 21m", "unproductive_time" => "52m"],
-                ["user_id" => 0, "name" => "Bob Demo", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "value_score" => 50, "total_time" => "6h 10m", "contribution_percent" => 25, "productive_percent" => 50, "neutral_percent" => 30, "unproductive_percent" => 20, "productive_time" => "3h 5m", "neutral_time" => "1h 51m", "unproductive_time" => "1h 14m"],
-                ["user_id" => 0, "name" => "Charlie Demo", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "value_score" => 20, "total_time" => "3h 5m", "contribution_percent" => 15, "productive_percent" => 20, "neutral_percent" => 40, "unproductive_percent" => 40, "productive_time" => "37m", "neutral_time" => "1h 14m", "unproductive_time" => "1h 14m"],
+                ["user_id" => 0, "name" => "Alice Demo", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "value_score" => 74, "total_time" => "8h 30m", "contribution_percent" => 35, "productive_percent" => 74, "neutral_percent" => 16, "unproductive_percent" => 10, "productive_time" => "6h 17m", "neutral_time" => "1h 21m", "unproductive_time" => "52m", "recognition_month_count" => 0],
+                ["user_id" => 0, "name" => "Bob Demo", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "value_score" => 50, "total_time" => "6h 10m", "contribution_percent" => 25, "productive_percent" => 50, "neutral_percent" => 30, "unproductive_percent" => 20, "productive_time" => "3h 5m", "neutral_time" => "1h 51m", "unproductive_time" => "1h 14m", "recognition_month_count" => 0],
+                ["user_id" => 0, "name" => "Charlie Demo", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "value_score" => 20, "total_time" => "3h 5m", "contribution_percent" => 15, "productive_percent" => 20, "neutral_percent" => 40, "unproductive_percent" => 40, "productive_time" => "37m", "neutral_time" => "1h 14m", "unproductive_time" => "1h 14m", "recognition_month_count" => 0],
             ],
             "total_members" => 6,
             "week_productivity_percent" => [
@@ -121,7 +121,117 @@ return [
                     ]
                 ]
             ],
-            "projects_overdue" => 2
+            "projects_overdue" => 2,
+            "recognition_leaderboard" => [
+                "month_label" => "August 2026",
+                "last_month_winner" => [
+                    "id" => 1,
+                    "user_id" => 1,
+                    "name" => "Sumith Sharma",
+                    "profile_photo_url" => null,
+                    "count" => 8,
+                    "month" => "July 2026"
+                ],
+                "winner_badge_user_ids" => [1],
+                "personal_stats" => [
+                    "received" => 3,
+                    "rank" => 2,
+                    "total_members" => 10,
+                    "rank_formatted" => "#2 of 10"
+                ],
+                "top_receivers" => [
+                    [
+                        "rank" => 1,
+                        "user_id" => 1,
+                        "name" => "Sumith Sharma",
+                        "profile_photo_url" => null,
+                        "received" => 8,
+                        "recognitions" => [
+                            [
+                                "id" => 1,
+                                "sender_name" => "Arti Patel",
+                                "message" => "Great work on client presentation!",
+                                "date_formatted" => "Sep 05, 2026",
+                                "created_at_human" => "2 days ago"
+                            ]
+                        ],
+                        "is_current_user" => false
+                    ],
+                    [
+                        "rank" => 2,
+                        "user_id" => 2,
+                        "name" => "Pallav Sen",
+                        "profile_photo_url" => null,
+                        "received" => 6,
+                        "recognitions" => [
+                            [
+                                "id" => 2,
+                                "sender_name" => "Sumith Sharma",
+                                "message" => "Consistent effort in sprint release",
+                                "date_formatted" => "Sep 04, 2026",
+                                "created_at_human" => "3 days ago"
+                            ]
+                        ],
+                        "is_current_user" => true
+                    ],
+                    [
+                        "rank" => 3,
+                        "user_id" => 3,
+                        "name" => "Arti Patel",
+                        "profile_photo_url" => null,
+                        "received" => 5,
+                        "recognitions" => [
+                            [
+                                "id" => 3,
+                                "sender_name" => "Pallav Sen",
+                                "message" => "Above and beyond support for team",
+                                "date_formatted" => "Sep 03, 2026",
+                                "created_at_human" => "4 days ago"
+                            ]
+                        ],
+                        "is_current_user" => false
+                    ],
+                    [
+                        "rank" => 4,
+                        "user_id" => 4,
+                        "name" => "Rahul Verma",
+                        "profile_photo_url" => null,
+                        "received" => 3,
+                        "recognitions" => [
+                            [
+                                "id" => 4,
+                                "sender_name" => "Arti Patel",
+                                "message" => "Nice work on the API docs",
+                                "date_formatted" => "Sep 02, 2026",
+                                "created_at_human" => "5 days ago"
+                            ]
+                        ],
+                        "is_current_user" => false
+                    ]
+                ],
+                "hall_of_fame" => [
+                    [
+                        "month" => "July 2026",
+                        "name" => "Sumith Sharma",
+                        "profile_photo_url" => null,
+                        "count" => 8
+                    ],
+                    [
+                        "month" => "June 2026",
+                        "name" => "Arti Patel",
+                        "profile_photo_url" => null,
+                        "count" => 7
+                    ],
+                    [
+                        "month" => "May 2026",
+                        "name" => "Pallav Sen",
+                        "profile_photo_url" => null,
+                        "count" => 10
+                    ]
+                ],
+                "is_small_team" => false,
+                "total_members" => 10
+            ]
         ],
 
     ],
@@ -172,7 +282,117 @@ return [
                     "end_date" => "18-12-2025"
                 ],
             ],
-            "project_overdue" => 2
+            "project_overdue" => 2,
+            "recognition_leaderboard" => [
+                "month_label" => "August 2026",
+                "last_month_winner" => [
+                    "id" => 1,
+                    "user_id" => 1,
+                    "name" => "Sumith Sharma",
+                    "profile_photo_url" => null,
+                    "count" => 8,
+                    "month" => "July 2026"
+                ],
+                "winner_badge_user_ids" => [1],
+                "personal_stats" => [
+                    "received" => 3,
+                    "rank" => 2,
+                    "total_members" => 10,
+                    "rank_formatted" => "#2 of 10"
+                ],
+                "top_receivers" => [
+                    [
+                        "rank" => 1,
+                        "user_id" => 1,
+                        "name" => "Sumith Sharma",
+                        "profile_photo_url" => null,
+                        "received" => 8,
+                        "recognitions" => [
+                            [
+                                "id" => 1,
+                                "sender_name" => "Arti Patel",
+                                "message" => "Great work on client presentation!",
+                                "date_formatted" => "Sep 05, 2026",
+                                "created_at_human" => "2 days ago"
+                            ]
+                        ],
+                        "is_current_user" => false
+                    ],
+                    [
+                        "rank" => 2,
+                        "user_id" => 2,
+                        "name" => "Pallav Sen",
+                        "profile_photo_url" => null,
+                        "received" => 6,
+                        "recognitions" => [
+                            [
+                                "id" => 2,
+                                "sender_name" => "Sumith Sharma",
+                                "message" => "Consistent effort in sprint release",
+                                "date_formatted" => "Sep 04, 2026",
+                                "created_at_human" => "3 days ago"
+                            ]
+                        ],
+                        "is_current_user" => true
+                    ],
+                    [
+                        "rank" => 3,
+                        "user_id" => 3,
+                        "name" => "Arti Patel",
+                        "profile_photo_url" => null,
+                        "received" => 5,
+                        "recognitions" => [
+                            [
+                                "id" => 3,
+                                "sender_name" => "Pallav Sen",
+                                "message" => "Above and beyond support for team",
+                                "date_formatted" => "Sep 03, 2026",
+                                "created_at_human" => "4 days ago"
+                            ]
+                        ],
+                        "is_current_user" => false
+                    ],
+                    [
+                        "rank" => 4,
+                        "user_id" => 4,
+                        "name" => "Rahul Verma",
+                        "profile_photo_url" => null,
+                        "received" => 3,
+                        "recognitions" => [
+                            [
+                                "id" => 4,
+                                "sender_name" => "Arti Patel",
+                                "message" => "Nice work on the API docs",
+                                "date_formatted" => "Sep 02, 2026",
+                                "created_at_human" => "5 days ago"
+                            ]
+                        ],
+                        "is_current_user" => false
+                    ]
+                ],
+                "hall_of_fame" => [
+                    [
+                        "month" => "July 2026",
+                        "name" => "Sumith Sharma",
+                        "profile_photo_url" => null,
+                        "count" => 8
+                    ],
+                    [
+                        "month" => "June 2026",
+                        "name" => "Arti Patel",
+                        "profile_photo_url" => null,
+                        "count" => 7
+                    ],
+                    [
+                        "month" => "May 2026",
+                        "name" => "Pallav Sen",
+                        "profile_photo_url" => null,
+                        "count" => 10
+                    ]
+                ],
+                "is_small_team" => false,
+                "total_members" => 10
+            ]
         ]
     ],
 
@@ -343,9 +563,9 @@ return [
         "dummy" => "true",
         "status_code" => 1,
         "data" => [
-            ["user_id" => 0, "name" => "Alice Demo", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "value_score" => 74, "total_time" => "8h 30m", "contribution_percent" => 35, "productive_percent" => 74, "neutral_percent" => 16, "unproductive_percent" => 10, "productive_time" => "6h 17m", "neutral_time" => "1h 21m", "unproductive_time" => "52m"],
-            ["user_id" => 0, "name" => "Bob Demo", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "value_score" => 50, "total_time" => "6h 10m", "contribution_percent" => 25, "productive_percent" => 50, "neutral_percent" => 30, "unproductive_percent" => 20, "productive_time" => "3h 5m", "neutral_time" => "1h 51m", "unproductive_time" => "1h 14m"],
-            ["user_id" => 0, "name" => "Charlie Demo", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "value_score" => 20, "total_time" => "3h 5m", "contribution_percent" => 15, "productive_percent" => 20, "neutral_percent" => 40, "unproductive_percent" => 40, "productive_time" => "37m", "neutral_time" => "1h 14m", "unproductive_time" => "1h 14m"],
+            ["user_id" => 0, "name" => "Alice Demo", "email" => "alicedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=857943944322131dummy", "value_score" => 74, "total_time" => "8h 30m", "contribution_percent" => 35, "productive_percent" => 74, "neutral_percent" => 16, "unproductive_percent" => 10, "productive_time" => "6h 17m", "neutral_time" => "1h 21m", "unproductive_time" => "52m", "recognition_month_count" => 0],
+            ["user_id" => 0, "name" => "Bob Demo", "email" => "bobdemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=85794w3944322132dummy", "value_score" => 50, "total_time" => "6h 10m", "contribution_percent" => 25, "productive_percent" => 50, "neutral_percent" => 30, "unproductive_percent" => 20, "productive_time" => "3h 5m", "neutral_time" => "1h 51m", "unproductive_time" => "1h 14m", "recognition_month_count" => 0],
+            ["user_id" => 0, "name" => "Charlie Demo", "email" => "charliedemo@mail.com", "profile_picture" => "https://api.dicebear.com/8.x/avataaars/svg?seed=8579s43944dummy", "value_score" => 20, "total_time" => "3h 5m", "contribution_percent" => 15, "productive_percent" => 20, "neutral_percent" => 40, "unproductive_percent" => 40, "productive_time" => "37m", "neutral_time" => "1h 14m", "unproductive_time" => "1h 14m", "recognition_month_count" => 0],
         ],
     ],
     "report" => [
@@ -1005,7 +1225,8 @@ return [
                     "start_date" => "19-11-2025",
                     "end_date" => "25-12-2025"
                 ],
-            ]
+            ],
+            "recognition_month_count" => 0
         ]
     ],
 

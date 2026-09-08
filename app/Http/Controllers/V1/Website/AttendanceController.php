@@ -14,6 +14,10 @@ class AttendanceController extends Controller
 {
     public function createAttendanceSchedule(Request $request)
     {
+        if (!auth()->user()->isAdminOrSubAdmin()) {
+            return response()->json(['status_code' => 0, 'message' => 'Unauthorized action.'], 403);
+        }
+
         $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
@@ -53,12 +57,17 @@ class AttendanceController extends Controller
         $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
         $timezoneString = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
 
-        $adminId = auth()->user()->getAdminId();
+        $authUser = auth()->user();
 
-        $teamMembers = User::where(function ($query) use ($adminId) {
-            $query->where('users.parent_user_id', $adminId)
-                  ->orWhere('users.id', $adminId);
-        })->get();
+        if ($authUser->isMember()) {
+            $teamMembers = User::where('id', $authUser->id)->get();
+        } else {
+            $adminId = $authUser->getAdminId();
+            $teamMembers = User::where(function ($query) use ($adminId) {
+                $query->where('users.parent_user_id', $adminId)
+                      ->orWhere('users.id', $adminId);
+            })->get();
+        }
 
         $attendanceRecords = [];
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V1\Website;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\ProductivityTip;
+use App\Models\Recognition;
 use App\Models\User;
 use App\Models\UserActivity;
 use App\Services\ChatGptService;
@@ -26,10 +27,18 @@ class DashboardController extends Controller
     {
         $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
         $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
-        $adminId = auth()->user()->getAdminId();
-        $teamUserIds = User::where('parent_user_id', $adminId)
-            ->orWhere('id', $adminId)
-            ->pluck('id');
+        $user = auth()->user();
+        $isMember = $user->isMember();
+
+        if ($isMember) {
+            $adminId = $user->id;
+            $teamUserIds = collect([$user->id]);
+        } else {
+            $adminId = $user->getAdminId();
+            $teamUserIds = User::where('parent_user_id', $adminId)
+                ->orWhere('id', $adminId)
+                ->pluck('id');
+        }
 
         $topMemberRequestOnly = $request->input('top_member_req_only', false);
         $topProcessRequestOnly = $request->input('top_process_req_only', false);
@@ -37,7 +46,7 @@ class DashboardController extends Controller
     //    $activeProjectsRequestOnly = $request->input('active_projects_req_only', false);
 
         if ($topMemberRequestOnly) {
-            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+            if (!$isMember && $teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
                 return response()->json(config('dummy.top_members'));
             }
             $topMembers = $this->getTopMostWorkingMembers($adminId, $request->input('top_member_days', 1));
@@ -45,7 +54,7 @@ class DashboardController extends Controller
         }
 
         if ($topProcessRequestOnly) {
-            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+            if (!$isMember && $teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
                 return response()->json(config('dummy.top_processes'));
             }
             $topProcesses = Helper::getTopProcesses($request->input('top_process_days', 7), $teamUserIds);
@@ -54,7 +63,7 @@ class DashboardController extends Controller
         }
 
         if ($todayUserAttendanceRequestOnly) {
-            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+            if (!$isMember && $teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
                 return response()->json(config('dummy.attendance'));
             }
             $todaysUsersAttendanceList = $this->getUsersAttendanceToday($teamUserIds, $request->input('timezone_offset_minutes', 0));
@@ -78,9 +87,12 @@ class DashboardController extends Controller
         $projectOverdue = Helper::getProjectCountByStatus($adminId,'OVERDUE',$teamUserIds);
         $topEmployeesMonthlyTrend = $this->getTopEmployeesMonthlyTrend($teamUserIds);
 
-        if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+        if (!$isMember && $teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
             return response()->json(config('dummy.dashboard'));
         }
+
+        $companyAdminId = auth()->user()->getAdminId();
+        $recognitionLeaderboard = Helper::getRecognitionLeaderboard(auth()->id(), $companyAdminId);
 
         $data =  [
             'dummy'=> false,
@@ -97,7 +109,9 @@ class DashboardController extends Controller
             'week_productivity_ui_action' => $weekProductivityReport['ui_action'],
             'active_project_list' => $activeProjectsList,
             'projects_overdue' => $projectOverdue,
-            'top_employees_monthly_trend' => $topEmployeesMonthlyTrend
+            'project_overdue' => $projectOverdue,
+            'top_employees_monthly_trend' => $topEmployeesMonthlyTrend,
+            'recognition_leaderboard' => $recognitionLeaderboard,
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -121,6 +135,7 @@ class DashboardController extends Controller
         $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
         $activeProjectList = Helper::getProjectsForUser($userId,'ACTIVE');
         $projectOverdue = Helper::getProjectCountByStatus($userId,'OVERDUE',$teamUserIds);
+        $recognitionLeaderboard = Helper::getRecognitionLeaderboard($userId, auth()->user()->getAdminId());
 
         //$productivityTips = $this->getProductivityTips();
 
@@ -136,7 +151,9 @@ class DashboardController extends Controller
             'week_productivity_percent' => $weekProductivityReport['days'],
             'week_productivity_ui_action' => $weekProductivityReport['ui_action'],
             'active_project_list' => $activeProjectList,
-            'project_overdue' => $projectOverdue
+            'project_overdue' => $projectOverdue,
+            'projects_overdue' => $projectOverdue,
+            'recognition_leaderboard' => $recognitionLeaderboard,
         ];
         if(!Helper::hasUsedBacklsh($teamUserIds)){
             return response()->json(config('dummy.user_dashboard'));
@@ -452,7 +469,18 @@ private function getTopMostWorkingMembers($userId, $days = 1)
         })
         ->sum('total_seconds') ?: 1;
 
-    $topMembers->transform(function ($member) use ($totalTeamLoggedSeconds) {
+    $memberUserIds = $topMembers->pluck('user_id')->filter()->unique()->toArray();
+    $recognitionCounts = [];
+    if (!empty($memberUserIds)) {
+        $recognitionCounts = Recognition::whereIn('recipient_id', $memberUserIds)
+            ->thisMonth()
+            ->select('recipient_id', DB::raw('count(*) as count'))
+            ->groupBy('recipient_id')
+            ->pluck('count', 'recipient_id')
+            ->toArray();
+    }
+
+    $topMembers->transform(function ($member) use ($totalTeamLoggedSeconds, $recognitionCounts) {
         $totalLogged = $member->total_logged_seconds ?: 1;
 
         $member->productive_percent = round(($member->total_productive_seconds / $totalLogged) * 100, 2);
@@ -468,6 +496,8 @@ private function getTopMostWorkingMembers($userId, $days = 1)
 
         // Use the exact User model logic for profile picture
         $member->profile_picture = (new User(['profile_picture' => $member->profile_picture]))->profile_picture;
+
+        $member->recognition_month_count = $recognitionCounts[$member->user_id] ?? 0;
 
         // Clean up keys not used in the frontend
         unset($member->total_productive_seconds);
@@ -561,7 +591,8 @@ private function getTopMostWorkingMembers($userId, $days = 1)
     }
     public function fetchAdminProductivityTips()
     {
-        $adminId = auth()->user()->getAdminId();
+        $user = auth()->user();
+        $adminId = $user->isMember() ? $user->id : $user->getAdminId();
 
         $productivityTip = ProductivityTip::where('user_id', $adminId)
             ->where('admin', true)

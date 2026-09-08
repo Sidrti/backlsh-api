@@ -35,6 +35,13 @@ class RecognitionController extends Controller
         ]);
 
         $sender = auth()->user();
+        if (!in_array($sender->role, ['ADMIN', 'SUBADMIN'])) {
+            return response()->json([
+                'status_code' => 0,
+                'message' => 'Only admins and subadmins can give recognitions.',
+            ], 403);
+        }
+
         $recipientId = (int) $request->input('recipient_id');
 
         if ($sender->id === $recipientId) {

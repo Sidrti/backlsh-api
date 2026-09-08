@@ -28,8 +28,25 @@ class WebsiteScreenshotController extends Controller
             ],
             'timezone_offset_minutes' => 'required|integer'
         ]);
-         if($request->input('user_id') == 0) {
-            return response()->json(config('dummy.screenshots'));
+
+        $authUser = auth()->user();
+        $requestedUserId = (int) $request->input('user_id');
+
+        if ($authUser->isMember()) {
+            $userId = $authUser->id;
+        } else {
+            if ($requestedUserId === 0) {
+                return response()->json(config('dummy.screenshots'));
+            }
+            $adminId = $authUser->getAdminId();
+            $isInTeam = DB::table('users')->where('id', $requestedUserId)
+                ->where(function ($q) use ($adminId) {
+                    $q->where('parent_user_id', $adminId)->orWhere('id', $adminId);
+                })->exists();
+            if (!$isInTeam) {
+                return response()->json(['status_code' => 0, 'message' => 'Unauthorized access to member screenshots.'], 403);
+            }
+            $userId = $requestedUserId;
         }
 
         $timezoneOffset = $request->input('timezone_offset_minutes'); // In minutes
@@ -54,7 +71,7 @@ class WebsiteScreenshotController extends Controller
             ->format('H:i:s')
             : Carbon::now()->addMinutes($timezoneOffset)->addHour()->format('H:i:s');
 
-        $screenshots = UserScreenshot::where('user_screenshots.user_id', $request->input('user_id'))
+        $screenshots = UserScreenshot::where('user_screenshots.user_id', $userId)
             ->select('user_screenshots.*', 'processes.id as process_id', 'processes.process_name', 'processes.type')
             ->join('processes', 'processes.id', 'user_screenshots.process_id')
             ->whereBetween('user_screenshots.created_at', [$startDate, $endDate])

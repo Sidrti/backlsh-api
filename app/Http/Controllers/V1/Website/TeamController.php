@@ -23,6 +23,10 @@ class TeamController extends Controller
     }
     public function createTeamMember(Request $request)
     {
+        if (!auth()->user()->isAdminOrSubAdmin()) {
+            return response()->json(['status_code' => 2, 'message' => 'Unauthorized action.'], 403);
+        }
+
         $request->validate([
             'name' => 'required|string',
             'email' =>'required|email',
@@ -42,6 +46,10 @@ class TeamController extends Controller
     }
     public function createTeamMemberBulkAdd(Request $request)
     {
+        if (!auth()->user()->isAdminOrSubAdmin()) {
+            return response()->json(['status_code' => 2, 'message' => 'Unauthorized action.'], 403);
+        }
+
         $request->validate([
             'file' => 'required|mimes:csv|max:10240',
         ]);
@@ -80,25 +88,35 @@ class TeamController extends Controller
     public function fetchTeamMembers(Request $request)
     {
         $currentDate = Carbon::now();
-        $adminId = auth()->user()->getAdminId();
+        $user = auth()->user();
         $tenDaysAgo = $currentDate->copy()->subDays(10)->toDateString();
 
-        // Fetch team members along with their activity status
-        $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
-            ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
-             ->where(function ($query) use ($adminId) {
-                $query->where('users.parent_user_id', $adminId)
-                      ->orWhere('users.id', $adminId);
+        if ($user->isMember()) {
+            $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
+                ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
+                ->where('users.id', $user->id)
+                ->groupBy('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
+                ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
+                ->get();
+        } else {
+            $adminId = $user->getAdminId();
+            // Fetch team members along with their activity status
+            $teamMembers = User::select('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
+                ->leftJoin('user_activities', 'users.id', '=', 'user_activities.user_id')
+                ->where(function ($query) use ($adminId) {
+                    $query->where('users.parent_user_id', $adminId)
+                          ->orWhere('users.id', $adminId);
                 })
-            ->groupBy('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
-            ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
-            ->get();
+                ->groupBy('users.id','users.name','users.email','users.profile_picture','users.stealth_mode','users.role')
+                ->selectRaw('IF(MAX(user_activities.start_datetime) IS NULL OR MAX(user_activities.start_datetime) < ?, "INACTIVE", "ACTIVE") as activity_status', [$tenDaysAgo])
+                ->get();
 
-        $teamUserIds = $teamMembers->pluck('id');
+            $teamUserIds = $teamMembers->pluck('id');
 
-        if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
-            $demoMember = (object) config('dummy.team_member')[0];
-            $teamMembers = collect([$demoMember])->merge($teamMembers);
+            if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
+                $demoMember = (object) config('dummy.team_member')[0];
+                $teamMembers = collect([$demoMember])->merge($teamMembers);
+            }
         }
 
         $totalMembersCount = $teamMembers->count();
@@ -124,6 +142,10 @@ class TeamController extends Controller
 
     public function updateStealthMode(Request $request)
     {
+        if (!auth()->user()->isAdminOrSubAdmin()) {
+            return response()->json(['status_code' => 2, 'message' => 'Unauthorized action.'], 403);
+        }
+
         // Validate the request
         $request->validate([
             'stealth_mode' => 'required|boolean',
