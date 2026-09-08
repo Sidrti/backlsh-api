@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V1\Website;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\Process;
+use App\Models\Recognition;
 use App\Models\UserActivity;
 use App\Models\UserScreenshot;
 use App\Models\UserSubActivity;
@@ -33,8 +34,24 @@ class ReportController extends Controller
         $subActivityReqOnly = $request->input('subactivity_req_only', false);
         $projectId = $request->input('project_id', 0);
 
-        if($request->input('user_id') == 0) {
-            return response()->json(config('dummy.report'));
+        $authUser = auth()->user();
+        $requestedUserId = (int) $request->input('user_id');
+
+        if ($authUser->isMember()) {
+            $userId = $authUser->id;
+        } else {
+            if ($requestedUserId === 0) {
+                return response()->json(config('dummy.report'));
+            }
+            $adminId = $authUser->getAdminId();
+            $isInTeam = DB::table('users')->where('id', $requestedUserId)
+                ->where(function ($q) use ($adminId) {
+                    $q->where('parent_user_id', $adminId)->orWhere('id', $adminId);
+                })->exists();
+            if (!$isInTeam) {
+                return response()->json(['status_code' => 0, 'message' => 'Unauthorized access to member report.'], 403);
+            }
+            $userId = $requestedUserId;
         }
 
         $timezoneOffsetMinutes = $request->input('timezone_offset_minutes', 0);
@@ -55,8 +72,6 @@ class ReportController extends Controller
 
         $startUTC = $startDateLocal->copy()->setTimezone('UTC');
         $endUTC = $endDateLocal->copy()->setTimezone('UTC');
-
-        $userId = $request->input('user_id');
 
         if ($processReqOnly) {
             $process = $this->getProcessDataWithScreenshots($userId, $startUTC, $endUTC, $projectId);
@@ -82,6 +97,10 @@ class ReportController extends Controller
         $tasksOverdue = Helper::getTasksOverdue($userId,false);
         $projectsAssignedList = Helper::getProjectsForUser($userId);
 
+        $recognitionMonthCount = Recognition::where('recipient_id', $userId)
+            ->thisMonth()
+            ->count();
+
         $data =  [
             'process' => $process,
             'total_productive_hours' => $totalProductiveHours,
@@ -96,6 +115,7 @@ class ReportController extends Controller
             'total_tasks_assigned' => $totalTasksAssigned,
             'tasks_overdue' => $tasksOverdue,
             'projects_assigned_list' => $projectsAssignedList,
+            'recognition_month_count' => $recognitionMonthCount,
         ];
 
         return response()->json(['status_code' => 1, 'data' => $data]);

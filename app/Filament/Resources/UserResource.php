@@ -32,6 +32,14 @@ class UserResource extends Resource
                 ->email()
                 ->required()
                 ->maxLength(255),
+            TextInput::make('country_code')
+                ->label('Country Code')
+                ->placeholder('+1')
+                ->maxLength(10),
+            TextInput::make('mobile')
+                ->label('Phone Number')
+                ->tel()
+                ->maxLength(20),
             TextInput::make('password')
                 ->password()
                 ->required()
@@ -47,6 +55,12 @@ class UserResource extends Resource
                 TextColumn::make('name')->sortable()->searchable()
                     ->url(fn (User $record): string => static::getUrl('index', ['parent_user_id' => $record->id])),
                 TextColumn::make('email')->sortable()->searchable(),
+                TextColumn::make('mobile')
+                    ->label('Phone Number')
+                    ->getStateUsing(fn (User $record): ?string => $record->mobile ? trim(($record->country_code ?? '') . ' ' . $record->mobile) : null)
+                    ->placeholder('-')
+                    ->searchable(['mobile', 'country_code'])
+                    ->sortable(),
                 TextColumn::make('sub_users_count')->label('Users Count')->counts('subUsers'),
                 TextColumn::make('latestActivity.start_datetime')
                     ->label('Last Activity')

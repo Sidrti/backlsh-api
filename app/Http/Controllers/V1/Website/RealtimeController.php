@@ -24,11 +24,20 @@ class RealtimeController extends Controller
         $sign = $timezoneOffsetMinutes >= 0 ? '+' : '-';
         $timezoneString = sprintf('%s%02d:%02d', $sign, $hours, $minutes);
 
-        $adminId = auth()->user()->getAdminId();
-        $teamUserIds = User::where('parent_user_id', $adminId)
-            ->orWhere('id', $adminId)
-            ->pluck('id');
-        if($teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)){
+        $authUser = auth()->user();
+        $isMember = $authUser->isMember();
+
+        if ($isMember) {
+            $adminId = $authUser->id;
+            $teamUserIds = collect([$authUser->id]);
+        } else {
+            $adminId = $authUser->getAdminId();
+            $teamUserIds = User::where('parent_user_id', $adminId)
+                ->orWhere('id', $adminId)
+                ->pluck('id');
+        }
+
+        if (!$isMember && $teamUserIds->count() <= 1 && !Helper::hasUsedBacklsh($teamUserIds)) {
             return response()->json(config('dummy.realtime'));
         }
         $todayOnlineMemberCount = Helper::getMembersOnlineCount($adminId);
@@ -45,12 +54,7 @@ class RealtimeController extends Controller
 
         $nonProductiveUserCount = $this->countNonProductiveUsers($adminId);
         $todayTime = Carbon::today();
-        $membersPresentToday = Helper::getTodaysAttendanceCount(
-            User::where(function ($query) use ($adminId) {
-                $query->where('parent_user_id', $adminId)
-                    ->orWhere('id', $adminId);
-            })->pluck('id')->toArray()
-        );
+        $membersPresentToday = Helper::getTodaysAttendanceCount($teamUserIds->toArray());
 
         $data =  [
             'today_online_member_count' => $todayOnlineMemberCount,

@@ -4,6 +4,7 @@ namespace App\Helpers;
 
 use App\Models\AttendanceSchedule;
 use App\Models\Process;
+use App\Models\Recognition;
 use App\Models\User;
 use App\Models\UserActivity;
 use App\Models\UserProcessRating;
@@ -1137,6 +1138,210 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
             Log::error("Brevo error fetching lists: " . $e->getMessage());
         }
         return null;
+    }
+
+    public static function getRecognitionLeaderboard($userId, $teamAdminId = null)
+    {
+        $user = User::find($userId);
+        if (!$user) {
+            return null;
+        }
+
+        $adminId = $teamAdminId ?: $user->getAdminId();
+        $teamUsers = User::where('parent_user_id', $adminId)
+            ->orWhere('id', $adminId)
+            ->select('id', 'name', 'email', 'profile_picture', 'role')
+            ->get();
+
+        $teamUserIds = $teamUsers->pluck('id')->toArray();
+        $teamSize = count($teamUserIds);
+        $isSmallTeam = $teamSize < 5;
+
+        // Current Month bounds
+        $currentMonthStart = Carbon::now()->startOfMonth();
+        $currentMonthEnd = Carbon::now()->endOfMonth();
+        $currentMonthLabel = Carbon::now()->format('F Y');
+
+        // Fetch recognitions with sender details in current month
+        $monthRecognitions = Recognition::with(['sender:id,name,email,profile_picture'])
+            ->whereIn('recipient_id', $teamUserIds)
+            ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy('recipient_id');
+
+        // Build rankings
+        $leaderboardMembers = $teamUsers->map(function ($u) use ($monthRecognitions, $userId) {
+            $userRecs = $monthRecognitions->get($u->id, collect())->map(function ($rec) {
+                $senderPic = $rec->sender ? (new User(['profile_picture' => $rec->sender->profile_picture]))->profile_picture : null;
+                return [
+                    'id' => $rec->id,
+                    'sender_id' => $rec->sender_id,
+                    'sender_name' => $rec->sender ? $rec->sender->name : 'Teammate',
+                    'sender_profile_picture' => $senderPic,
+                    'preset_type' => $rec->preset_type,
+                    'message' => $rec->message,
+                    'created_at' => $rec->created_at ? $rec->created_at->toISOString() : null,
+                    'created_at_human' => $rec->created_at ? $rec->created_at->diffForHumans() : '',
+                    'date_formatted' => $rec->created_at ? $rec->created_at->format('M d, Y') : '',
+                ];
+            })->values()->toArray();
+
+            $count = count($userRecs);
+
+            return [
+                'user_id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'profile_picture' => (new User(['profile_picture' => $u->profile_picture]))->profile_picture,
+                'count' => (int) $count,
+                'received' => (int) $count,
+                'recognitions' => $userRecs,
+                'is_current_user' => (int) $u->id === (int) $userId,
+            ];
+        })->sortByDesc('count')->values();
+
+        // Assign ranks (1-based)
+        $rankedMembers = [];
+        $currentUserRecs = $monthRecognitions->get($userId, collect())->map(function ($rec) {
+            $senderPic = $rec->sender ? (new User(['profile_picture' => $rec->sender->profile_picture]))->profile_picture : null;
+            return [
+                'id' => $rec->id,
+                'sender_id' => $rec->sender_id,
+                'sender_name' => $rec->sender ? $rec->sender->name : 'Teammate',
+                'sender_profile_picture' => $senderPic,
+                'preset_type' => $rec->preset_type,
+                'message' => $rec->message,
+                'created_at' => $rec->created_at ? $rec->created_at->toISOString() : null,
+                'created_at_human' => $rec->created_at ? $rec->created_at->diffForHumans() : '',
+                'date_formatted' => $rec->created_at ? $rec->created_at->format('M d, Y') : '',
+            ];
+        })->values()->toArray();
+
+        $currentUserStats = [
+            'received' => count($currentUserRecs),
+            'recognitions' => $currentUserRecs,
+            'rank' => null,
+            'rank_formatted' => null,
+            'is_small_team' => $isSmallTeam,
+            'team_size' => $teamSize,
+        ];
+
+        // Assign ranks with proper tie handling (only count > 0 gets ranked)
+        $rankedMembers = [];
+        $currentRank = 0;
+        $itemsAtRank = 0;
+        $prevCount = null;
+
+        foreach ($leaderboardMembers as $m) {
+            if ($m['count'] > 0) {
+                if ($m['count'] !== $prevCount) {
+                    $currentRank = $currentRank + $itemsAtRank + 1;
+                    $itemsAtRank = 0;
+                    $prevCount = $m['count'];
+                }
+                $itemsAtRank++;
+                $m['rank'] = $currentRank;
+            } else {
+                $m['rank'] = null;
+            }
+
+            $rankedMembers[] = $m;
+
+            if ($m['user_id'] === $userId) {
+                $currentUserStats['rank'] = $m['rank'];
+                if ($m['rank']) {
+                    $currentUserStats['rank_formatted'] = $isSmallTeam ? null : "#{$m['rank']} of {$teamSize}";
+                } else {
+                    $currentUserStats['rank_formatted'] = 'Unranked';
+                }
+            }
+        }
+
+        // Top Receivers for the card (top 5 with count > 0)
+        $topReceivers = collect($rankedMembers)->filter(function ($m) {
+            return $m['count'] > 0;
+        })->take(5)->values();
+
+        // --- Previous Month Winner ---
+        $lastMonthStart = Carbon::now()->subMonth()->startOfMonth();
+        $lastMonthEnd = Carbon::now()->subMonth()->endOfMonth();
+        $lastMonthLabel = Carbon::now()->subMonth()->format('F Y');
+
+        $lastMonthReceived = DB::table('recognitions')
+            ->whereIn('recipient_id', $teamUserIds)
+            ->whereBetween('created_at', [$lastMonthStart, $lastMonthEnd])
+            ->select('recipient_id', DB::raw('count(*) as count'))
+            ->groupBy('recipient_id')
+            ->orderByDesc('count')
+            ->first();
+
+        $lastMonthWinner = null;
+        $winnerBadgeUserIds = [];
+
+        if ($lastMonthReceived && $lastMonthReceived->count > 0) {
+            $winnerUser = $teamUsers->firstWhere('id', $lastMonthReceived->recipient_id);
+            if ($winnerUser) {
+                $profPic = (new User(['profile_picture' => $winnerUser->profile_picture]))->profile_picture;
+                $lastMonthWinner = [
+                    'id' => $winnerUser->id,
+                    'user_id' => $winnerUser->id,
+                    'name' => $winnerUser->name,
+                    'profile_picture' => $profPic,
+                    'profile_photo_url' => $profPic,
+                    'count' => (int) $lastMonthReceived->count,
+                    'month' => $lastMonthLabel,
+                    'month_label' => $lastMonthLabel,
+                ];
+                $winnerBadgeUserIds[] = $winnerUser->id;
+            }
+        }
+
+        // --- Hall of Fame (Last 3 Completed Months) ---
+        $hallOfFame = [];
+        for ($i = 1; $i <= 3; $i++) {
+            $mStart = Carbon::now()->subMonths($i)->startOfMonth();
+            $mEnd = Carbon::now()->subMonths($i)->endOfMonth();
+            $mLabel = Carbon::now()->subMonths($i)->format('F Y');
+
+            $monthWinnerRecord = DB::table('recognitions')
+                ->whereIn('recipient_id', $teamUserIds)
+                ->whereBetween('created_at', [$mStart, $mEnd])
+                ->select('recipient_id', DB::raw('count(*) as count'))
+                ->groupBy('recipient_id')
+                ->orderByDesc('count')
+                ->first();
+
+            if ($monthWinnerRecord && $monthWinnerRecord->count > 0) {
+                $wUser = $teamUsers->firstWhere('id', $monthWinnerRecord->recipient_id);
+                if ($wUser) {
+                    $wProfPic = (new User(['profile_picture' => $wUser->profile_picture]))->profile_picture;
+                    $hallOfFame[] = [
+                        'month' => $mLabel,
+                        'month_label' => $mLabel,
+                        'user_id' => $wUser->id,
+                        'name' => $wUser->name,
+                        'profile_picture' => $wProfPic,
+                        'profile_photo_url' => $wProfPic,
+                        'count' => (int) $monthWinnerRecord->count,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'month_label' => $currentMonthLabel,
+            'current_month_label' => $currentMonthLabel,
+            'is_small_team' => $isSmallTeam,
+            'team_size' => $teamSize,
+            'personal_stats' => $currentUserStats,
+            'your_stats' => $currentUserStats,
+            'last_month_winner' => $lastMonthWinner,
+            'winner_badge_user_ids' => $winnerBadgeUserIds,
+            'top_receivers' => $topReceivers,
+            'full_board' => $rankedMembers,
+            'hall_of_fame' => $hallOfFame,
+        ];
     }
 
 }
