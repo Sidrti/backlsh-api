@@ -137,7 +137,19 @@ return [
                     "received" => 3,
                     "rank" => 2,
                     "total_members" => 10,
-                    "rank_formatted" => "#2 of 10"
+                    "rank_formatted" => "#2 of 10",
+                    "given" => 4,
+                    "giver_rank" => 1,
+                    "giver_rank_formatted" => "#1 of 10"
+                ],
+                "last_month_top_giver" => [
+                    "id" => 3,
+                    "user_id" => 3,
+                    "name" => "Arti Patel",
+                    "profile_photo_url" => null,
+                    "count" => 9,
+                    "month" => "August 2026",
+                    "month_label" => "August 2026"
                 ],
                 "top_receivers" => [
                     [
@@ -209,6 +221,62 @@ return [
                         "is_current_user" => false
                     ]
                 ],
+                "top_givers" => [
+                    [
+                        "rank" => 1,
+                        "user_id" => 2,
+                        "name" => "Pallav Sen",
+                        "profile_photo_url" => null,
+                        "count" => 4,
+                        "given" => 4,
+                        "is_current_user" => true,
+                        "recognitions_given" => [
+                            [
+                                "id" => 3,
+                                "recipient_name" => "Arti Patel",
+                                "message" => "Above and beyond support for team",
+                                "date_formatted" => "Sep 03, 2026",
+                                "created_at_human" => "4 days ago"
+                            ]
+                        ]
+                    ],
+                    [
+                        "rank" => 2,
+                        "user_id" => 3,
+                        "name" => "Arti Patel",
+                        "profile_photo_url" => null,
+                        "count" => 3,
+                        "given" => 3,
+                        "is_current_user" => false,
+                        "recognitions_given" => [
+                            [
+                                "id" => 1,
+                                "recipient_name" => "Sumith Sharma",
+                                "message" => "Great work on client presentation!",
+                                "date_formatted" => "Sep 05, 2026",
+                                "created_at_human" => "2 days ago"
+                            ]
+                        ]
+                    ],
+                    [
+                        "rank" => 3,
+                        "user_id" => 1,
+                        "name" => "Sumith Sharma",
+                        "profile_photo_url" => null,
+                        "count" => 2,
+                        "given" => 2,
+                        "is_current_user" => false,
+                        "recognitions_given" => [
+                            [
+                                "id" => 2,
+                                "recipient_name" => "Pallav Sen",
+                                "message" => "Consistent effort in sprint release",
+                                "date_formatted" => "Sep 04, 2026",
+                                "created_at_human" => "3 days ago"
+                            ]
+                        ]
+                    ]
+                ],
                 "hall_of_fame" => [
                     [
                         "month" => "July 2026",
@@ -231,6 +299,38 @@ return [
                 ],
                 "is_small_team" => false,
                 "total_members" => 10
+            ],
+            "recognition_activity_feed" => [
+                [
+                    "id" => 1,
+                    "sender_id" => 3,
+                    "sender_name" => "Arti Patel",
+                    "sender_profile_picture" => null,
+                    "recipient_id" => 1,
+                    "recipient_name" => "Sumith Sharma",
+                    "recipient_profile_picture" => null,
+                    "headline" => "Arti Patel gave Sumith Sharma a shoutout 👏",
+                    "preset_type" => "GREAT_WORK",
+                    "message" => "Great work on client presentation!",
+                    "created_at" => "2026-09-22T10:00:00Z",
+                    "created_at_human" => "2 days ago",
+                    "date_formatted" => "Sep 22, 2026"
+                ],
+                [
+                    "id" => 2,
+                    "sender_id" => 1,
+                    "sender_name" => "Sumith Sharma",
+                    "sender_profile_picture" => null,
+                    "recipient_id" => 2,
+                    "recipient_name" => "Pallav Sen",
+                    "recipient_profile_picture" => null,
+                    "headline" => "Sumith Sharma gave Pallav Sen a shoutout 👏",
+                    "preset_type" => "CONSISTENT_EFFORT",
+                    "message" => "Consistent effort in sprint release",
+                    "created_at" => "2026-09-21T14:30:00Z",
+                    "created_at_human" => "3 days ago",
+                    "date_formatted" => "Sep 21, 2026"
+                ]
             ]
         ],
 
@@ -298,7 +398,19 @@ return [
                     "received" => 3,
                     "rank" => 2,
                     "total_members" => 10,
-                    "rank_formatted" => "#2 of 10"
+                    "rank_formatted" => "#2 of 10",
+                    "given" => 4,
+                    "giver_rank" => 1,
+                    "giver_rank_formatted" => "#1 of 10"
+                ],
+                "last_month_top_giver" => [
+                    "id" => 3,
+                    "user_id" => 3,
+                    "name" => "Arti Patel",
+                    "profile_photo_url" => null,
+                    "count" => 9,
+                    "month" => "August 2026",
+                    "month_label" => "August 2026"
                 ],
                 "top_receivers" => [
                     [
@@ -370,6 +482,62 @@ return [
                         "is_current_user" => false
                     ]
                 ],
+                "top_givers" => [
+                    [
+                        "rank" => 1,
+                        "user_id" => 2,
+                        "name" => "Pallav Sen",
+                        "profile_photo_url" => null,
+                        "count" => 4,
+                        "given" => 4,
+                        "is_current_user" => true,
+                        "recognitions_given" => [
+                            [
+                                "id" => 3,
+                                "recipient_name" => "Arti Patel",
+                                "message" => "Above and beyond support for team",
+                                "date_formatted" => "Sep 03, 2026",
+                                "created_at_human" => "4 days ago"
+                            ]
+                        ]
+                    ],
+                    [
+                        "rank" => 2,
+                        "user_id" => 3,
+                        "name" => "Arti Patel",
+                        "profile_photo_url" => null,
+                        "count" => 3,
+                        "given" => 3,
+                        "is_current_user" => false,
+                        "recognitions_given" => [
+                            [
+                                "id" => 1,
+                                "recipient_name" => "Sumith Sharma",
+                                "message" => "Great work on client presentation!",
+                                "date_formatted" => "Sep 05, 2026",
+                                "created_at_human" => "2 days ago"
+                            ]
+                        ]
+                    ],
+                    [
+                        "rank" => 3,
+                        "user_id" => 1,
+                        "name" => "Sumith Sharma",
+                        "profile_photo_url" => null,
+                        "count" => 2,
+                        "given" => 2,
+                        "is_current_user" => false,
+                        "recognitions_given" => [
+                            [
+                                "id" => 2,
+                                "recipient_name" => "Pallav Sen",
+                                "message" => "Consistent effort in sprint release",
+                                "date_formatted" => "Sep 04, 2026",
+                                "created_at_human" => "3 days ago"
+                            ]
+                        ]
+                    ]
+                ],
                 "hall_of_fame" => [
                     [
                         "month" => "July 2026",
@@ -392,6 +560,38 @@ return [
                 ],
                 "is_small_team" => false,
                 "total_members" => 10
+            ],
+            "recognition_activity_feed" => [
+                [
+                    "id" => 1,
+                    "sender_id" => 3,
+                    "sender_name" => "Arti Patel",
+                    "sender_profile_picture" => null,
+                    "recipient_id" => 1,
+                    "recipient_name" => "Sumith Sharma",
+                    "recipient_profile_picture" => null,
+                    "headline" => "Arti Patel gave Sumith Sharma a shoutout 👏",
+                    "preset_type" => "GREAT_WORK",
+                    "message" => "Great work on client presentation!",
+                    "created_at" => "2026-09-22T10:00:00Z",
+                    "created_at_human" => "2 days ago",
+                    "date_formatted" => "Sep 22, 2026"
+                ],
+                [
+                    "id" => 2,
+                    "sender_id" => 1,
+                    "sender_name" => "Sumith Sharma",
+                    "sender_profile_picture" => null,
+                    "recipient_id" => 2,
+                    "recipient_name" => "Pallav Sen",
+                    "recipient_profile_picture" => null,
+                    "headline" => "Sumith Sharma gave Pallav Sen a shoutout 👏",
+                    "preset_type" => "CONSISTENT_EFFORT",
+                    "message" => "Consistent effort in sprint release",
+                    "created_at" => "2026-09-21T14:30:00Z",
+                    "created_at_human" => "3 days ago",
+                    "date_formatted" => "Sep 21, 2026"
+                ]
             ]
         ]
     ],

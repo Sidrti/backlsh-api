@@ -35,13 +35,6 @@ class RecognitionController extends Controller
         ]);
 
         $sender = auth()->user();
-        if (!in_array($sender->role, ['ADMIN', 'SUBADMIN'])) {
-            return response()->json([
-                'status_code' => 0,
-                'message' => 'Only admins and subadmins can give recognitions.',
-            ], 403);
-        }
-
         $recipientId = (int) $request->input('recipient_id');
 
         if ($sender->id === $recipientId) {
@@ -57,6 +50,30 @@ class RecognitionController extends Controller
                 'status_code' => 0,
                 'message' => 'Recipient not found.',
             ], 404);
+        }
+
+        // Verify recipient and sender belong to the same team/organization
+        $senderAdminId = $sender->getAdminId();
+        $recipientAdminId = $recipient->getAdminId();
+        if ($senderAdminId !== $recipientAdminId && $recipient->id !== $senderAdminId && $sender->id !== $recipientAdminId) {
+            return response()->json([
+                'status_code' => 0,
+                'message' => 'You can only recognize teammates in your organization.',
+            ], 403);
+        }
+
+        // For regular members (non-admins), enforce a healthy weekly limit of 5 shoutouts
+        if (!in_array($sender->role, ['ADMIN', 'SUBADMIN'])) {
+            $weeklyGivenCount = Recognition::where('sender_id', $sender->id)
+                ->where('created_at', '>=', Carbon::now()->startOfWeek())
+                ->count();
+
+            if ($weeklyGivenCount >= 5) {
+                return response()->json([
+                    'status_code' => 0,
+                    'message' => 'You have reached your limit of 5 recognitions for this week. It resets on Monday!',
+                ], 429);
+            }
         }
 
         // Spam guard: Max 1 recognition from the same sender to the same recipient in the last 24 hours
@@ -132,12 +149,18 @@ class RecognitionController extends Controller
             ->thisMonth()
             ->count();
 
+        // Calculate this month's given count for this sender
+        $senderMonthGivenCount = Recognition::where('sender_id', $sender->id)
+            ->thisMonth()
+            ->count();
+
         return response()->json([
             'status_code' => 1,
             'message' => 'Recognition sent successfully!',
             'data' => [
                 'recognition' => $recognition->load('sender:id,name,email,profile_picture'),
                 'recipient_month_count' => $monthCount,
+                'sender_month_given_count' => $senderMonthGivenCount,
             ],
         ]);
     }
@@ -197,6 +220,69 @@ class RecognitionController extends Controller
                 'can_send_today' => $canSendToday,
             ],
             'message' => 'Recognition stats fetched successfully',
+        ]);
+    }
+
+    /**
+     * Fetch public recognition activity feed for the company / team.
+     * Shows: "Arti gave Siddhant a shoutout 👏"
+     */
+    public function feed(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        $adminId = $user->getAdminId();
+        $limit = (int) $request->input('limit', 15);
+
+        $feed = Helper::getRecognitionActivityFeed($adminId, $limit);
+
+        return response()->json([
+            'status_code' => 1,
+            'data' => $feed,
+            'message' => 'Recognition activity feed fetched successfully',
+        ]);
+    }
+
+    /**
+     * Fetch pending recognition recommendation prompts for the manager.
+     */
+    public function prompts(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        $adminId = $user->getAdminId();
+
+        $prompts = \App\Models\RecognitionPrompt::where('admin_id', $adminId)
+            ->where('status', 'PENDING')
+            ->with('candidate:id,name,email,profile_picture')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
+
+        return response()->json([
+            'status_code' => 1,
+            'data' => $prompts,
+            'message' => 'Recognition prompts fetched successfully',
+        ]);
+    }
+
+    /**
+     * Dismiss a recognition prompt so it doesn't clutter the manager's board.
+     */
+    public function dismissPrompt(Request $request, $id): JsonResponse
+    {
+        $user = auth()->user();
+        $adminId = $user->getAdminId();
+
+        $prompt = \App\Models\RecognitionPrompt::where('id', $id)
+            ->where('admin_id', $adminId)
+            ->first();
+
+        if ($prompt) {
+            $prompt->update(['status' => 'DISMISSED']);
+        }
+
+        return response()->json([
+            'status_code' => 1,
+            'message' => 'Prompt dismissed successfully',
         ]);
     }
 }

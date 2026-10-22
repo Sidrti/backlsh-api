@@ -16,6 +16,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('report:daily-team')->hourly();
+        $schedule->command('recognition:evaluate-triggers')->weeklyOn(1, '09:00');
+        $schedule->command('recognition:evaluate-triggers')->dailyAt('18:00');
     }
 
     /**

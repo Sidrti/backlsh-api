@@ -93,6 +93,7 @@ class DashboardController extends Controller
 
         $companyAdminId = auth()->user()->getAdminId();
         $recognitionLeaderboard = Helper::getRecognitionLeaderboard(auth()->id(), $companyAdminId);
+        $recognitionActivityFeed = Helper::getRecognitionActivityFeed($companyAdminId, 10);
 
         $data =  [
             'dummy'=> false,
@@ -112,6 +113,7 @@ class DashboardController extends Controller
             'project_overdue' => $projectOverdue,
             'top_employees_monthly_trend' => $topEmployeesMonthlyTrend,
             'recognition_leaderboard' => $recognitionLeaderboard,
+            'recognition_activity_feed' => $recognitionActivityFeed,
         ];
         return response()->json(['status_code' => 1, 'data' => $data]);
     }
@@ -135,7 +137,9 @@ class DashboardController extends Controller
         $weekProductivityReport = Helper::getWeeklyProductivityReport($teamUserIds);
         $activeProjectList = Helper::getProjectsForUser($userId,'ACTIVE');
         $projectOverdue = Helper::getProjectCountByStatus($userId,'OVERDUE',$teamUserIds);
-        $recognitionLeaderboard = Helper::getRecognitionLeaderboard($userId, auth()->user()->getAdminId());
+        $companyAdminId = auth()->user()->getAdminId();
+        $recognitionLeaderboard = Helper::getRecognitionLeaderboard($userId, $companyAdminId);
+        $recognitionActivityFeed = Helper::getRecognitionActivityFeed($companyAdminId, 10);
 
         //$productivityTips = $this->getProductivityTips();
 
@@ -154,6 +158,7 @@ class DashboardController extends Controller
             'project_overdue' => $projectOverdue,
             'projects_overdue' => $projectOverdue,
             'recognition_leaderboard' => $recognitionLeaderboard,
+            'recognition_activity_feed' => $recognitionActivityFeed,
         ];
         if(!Helper::hasUsedBacklsh($teamUserIds)){
             return response()->json(config('dummy.user_dashboard'));
