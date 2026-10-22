@@ -49,6 +49,16 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
+
+        RateLimiter::for('registration', function (Request $request) {
+            $maxAttempts = (int) env('REGISTRATION_RATE_LIMIT', 5);
+            return Limit::perMinute($maxAttempts)->by($request->ip())->response(function (Request $request, array $headers) {
+                return response()->json([
+                    'status_code' => 2,
+                    'message' => 'Too many registration attempts. Please try again after a few minutes.',
+                ], 429, $headers);
+            });
+        });
     }
     protected function mapApiRoutes()
     {

@@ -1263,7 +1263,89 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
             return $m['count'] > 0;
         })->take(5)->values();
 
-        // --- Previous Month Winner ---
+        // ==========================================
+        // --- TOP GIVERS RANKINGS (Current Month) ---
+        // ==========================================
+        $monthGivenRecognitions = Recognition::with(['recipient:id,name,email,profile_picture'])
+            ->whereIn('sender_id', $teamUserIds)
+            ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy('sender_id');
+
+        $giverMembers = $teamUsers->map(function ($u) use ($monthGivenRecognitions, $userId) {
+            $userGivenRecs = $monthGivenRecognitions->get($u->id, collect())->map(function ($rec) {
+                $recipientPic = $rec->recipient ? (new User(['profile_picture' => $rec->recipient->profile_picture]))->profile_picture : null;
+                return [
+                    'id' => $rec->id,
+                    'recipient_id' => $rec->recipient_id,
+                    'recipient_name' => $rec->recipient ? $rec->recipient->name : 'Teammate',
+                    'recipient_profile_picture' => $recipientPic,
+                    'preset_type' => $rec->preset_type,
+                    'message' => $rec->message,
+                    'created_at' => $rec->created_at ? $rec->created_at->toISOString() : null,
+                    'created_at_human' => $rec->created_at ? $rec->created_at->diffForHumans() : '',
+                    'date_formatted' => $rec->created_at ? $rec->created_at->format('M d, Y') : '',
+                ];
+            })->values()->toArray();
+
+            $count = count($userGivenRecs);
+
+            return [
+                'user_id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'profile_picture' => (new User(['profile_picture' => $u->profile_picture]))->profile_picture,
+                'count' => (int) $count,
+                'given' => (int) $count,
+                'recognitions_given' => $userGivenRecs,
+                'is_current_user' => (int) $u->id === (int) $userId,
+            ];
+        })->sortByDesc('count')->values();
+
+        // Assign giver ranks (1-based) with tie handling
+        $rankedGivers = [];
+        $currentGiverRank = 0;
+        $itemsAtGiverRank = 0;
+        $prevGiverCount = null;
+
+        $currentUserGivenCount = 0;
+        $currentUserGiverRank = null;
+
+        foreach ($giverMembers as $gm) {
+            if ($gm['count'] > 0) {
+                if ($gm['count'] !== $prevGiverCount) {
+                    $currentGiverRank = $currentGiverRank + $itemsAtGiverRank + 1;
+                    $itemsAtGiverRank = 0;
+                    $prevGiverCount = $gm['count'];
+                }
+                $itemsAtGiverRank++;
+                $gm['rank'] = $currentGiverRank;
+            } else {
+                $gm['rank'] = null;
+            }
+
+            $rankedGivers[] = $gm;
+
+            if ($gm['user_id'] === $userId) {
+                $currentUserGivenCount = $gm['count'];
+                $currentUserGiverRank = $gm['rank'];
+            }
+        }
+
+        // Top Givers for the card (top 5 with count > 0)
+        $topGivers = collect($rankedGivers)->filter(function ($m) {
+            return $m['count'] > 0;
+        })->take(5)->values();
+
+        // Attach giver metrics to personal_stats
+        $currentUserStats['given'] = $currentUserGivenCount;
+        $currentUserStats['giver_rank'] = $currentUserGiverRank;
+        $currentUserStats['giver_rank_formatted'] = $currentUserGiverRank
+            ? ($isSmallTeam ? null : "#{$currentUserGiverRank} of {$teamSize}")
+            : 'Unranked';
+
+        // --- Previous Month Winner (Receivers) ---
         $lastMonthStart = Carbon::now()->subMonth()->startOfMonth();
         $lastMonthEnd = Carbon::now()->subMonth()->endOfMonth();
         $lastMonthLabel = Carbon::now()->subMonth()->format('F Y');
@@ -1294,6 +1376,33 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
                     'month_label' => $lastMonthLabel,
                 ];
                 $winnerBadgeUserIds[] = $winnerUser->id;
+            }
+        }
+
+        // --- Previous Month Winner (Givers) ---
+        $lastMonthSent = DB::table('recognitions')
+            ->whereIn('sender_id', $teamUserIds)
+            ->whereBetween('created_at', [$lastMonthStart, $lastMonthEnd])
+            ->select('sender_id', DB::raw('count(*) as count'))
+            ->groupBy('sender_id')
+            ->orderByDesc('count')
+            ->first();
+
+        $lastMonthTopGiver = null;
+        if ($lastMonthSent && $lastMonthSent->count > 0) {
+            $giverUser = $teamUsers->firstWhere('id', $lastMonthSent->sender_id);
+            if ($giverUser) {
+                $profPic = (new User(['profile_picture' => $giverUser->profile_picture]))->profile_picture;
+                $lastMonthTopGiver = [
+                    'id' => $giverUser->id,
+                    'user_id' => $giverUser->id,
+                    'name' => $giverUser->name,
+                    'profile_picture' => $profPic,
+                    'profile_photo_url' => $profPic,
+                    'count' => (int) $lastMonthSent->count,
+                    'month' => $lastMonthLabel,
+                    'month_label' => $lastMonthLabel,
+                ];
             }
         }
 
@@ -1337,11 +1446,61 @@ public static function getActiveProjectsForTeam($teamUserIds, $startDate, $endDa
             'personal_stats' => $currentUserStats,
             'your_stats' => $currentUserStats,
             'last_month_winner' => $lastMonthWinner,
+            'last_month_top_giver' => $lastMonthTopGiver,
             'winner_badge_user_ids' => $winnerBadgeUserIds,
             'top_receivers' => $topReceivers,
+            'top_givers' => $topGivers,
             'full_board' => $rankedMembers,
+            'full_board_givers' => $rankedGivers,
             'hall_of_fame' => $hallOfFame,
         ];
     }
 
+    /**
+     * Get recent public recognition activity feed for the company / team
+     *
+     * @param int $teamAdminId
+     * @param int $limit
+     * @return array
+     */
+    public static function getRecognitionActivityFeed($teamAdminId, $limit = 15)
+    {
+        $teamUsers = User::where('parent_user_id', $teamAdminId)
+            ->orWhere('id', $teamAdminId)
+            ->pluck('id')
+            ->toArray();
+
+        $recognitions = Recognition::with([
+                'sender:id,name,email,profile_picture',
+                'recipient:id,name,email,profile_picture'
+            ])
+            ->whereIn('sender_id', $teamUsers)
+            ->orWhereIn('recipient_id', $teamUsers)
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+
+        return $recognitions->map(function ($rec) {
+            $senderPic = $rec->sender ? (new User(['profile_picture' => $rec->sender->profile_picture]))->profile_picture : null;
+            $recipientPic = $rec->recipient ? (new User(['profile_picture' => $rec->recipient->profile_picture]))->profile_picture : null;
+            $senderName = $rec->sender ? $rec->sender->name : 'Teammate';
+            $recipientName = $rec->recipient ? $rec->recipient->name : 'Teammate';
+
+            return [
+                'id' => $rec->id,
+                'sender_id' => $rec->sender_id,
+                'sender_name' => $senderName,
+                'sender_profile_picture' => $senderPic,
+                'recipient_id' => $rec->recipient_id,
+                'recipient_name' => $recipientName,
+                'recipient_profile_picture' => $recipientPic,
+                'headline' => "{$senderName} gave {$recipientName} a shoutout 👏",
+                'preset_type' => $rec->preset_type,
+                'message' => $rec->message,
+                'created_at' => $rec->created_at ? $rec->created_at->toISOString() : null,
+                'created_at_human' => $rec->created_at ? $rec->created_at->diffForHumans() : '',
+                'date_formatted' => $rec->created_at ? $rec->created_at->format('M d, Y') : '',
+            ];
+        })->values()->toArray();
+    }
 }

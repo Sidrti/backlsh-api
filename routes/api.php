@@ -31,12 +31,14 @@ Route::prefix('v1')->group(function () {
     Route::group(['prefix' => 'website'], function () {
         Route::post('/webhooks/lemonsqueezy', [LemonSqueezyWebhookController::class, 'handle']);
         Route::post('/auth/login', [AuthController::class, 'login']);
-        Route::post('/auth/register-admin', [AuthController::class, 'registerAdmin']);
+        Route::post('/auth/register-admin', [AuthController::class, 'registerAdmin'])->middleware('throttle:registration');
         Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
         Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
         Route::get('/auth/linkedin', [AuthController::class, 'redirectToLinkedin']);
         Route::get('/auth/linkedin/callback', [AuthController::class, 'handleLinkedinCallback']);
+        Route::post('/auth/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'verifyEmail']);
         Route::get('/auth/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'verifyEmail']);
+        Route::post('/auth/resend-verification-link', [AuthController::class, 'resendRegistrationVerificationLink'])->middleware('throttle:5,1');
         Route::post('/auth/forget-password/send-verification-link', [AuthController::class, 'forgetPasswordSendVerificationLink']);
         Route::get('/auth/forget-password/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'forgetPasswordVerifyEmail']);
         Route::get('/auth/app-link', [AuthController::class, 'fetchBacklshAppUrl']);
@@ -160,6 +162,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/recognitions', [RecognitionController::class, 'store']);
             Route::get('/recognitions/received', [RecognitionController::class, 'received']);
             Route::get('/recognitions/stats', [RecognitionController::class, 'userStats']);
+            Route::get('/recognitions/feed', [RecognitionController::class, 'feed']);
+            Route::get('/recognitions/prompts', [RecognitionController::class, 'prompts']);
+            Route::post('/recognitions/prompts/{id}/dismiss', [RecognitionController::class, 'dismissPrompt']);
 
         });
     });

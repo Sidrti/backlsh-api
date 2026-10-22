@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
+use App\Rules\Turnstile;
 
 class AuthController extends Controller
 {
@@ -27,6 +28,17 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
         if($user) {
             if (Hash::check($request->input('password'), $user->password)) {
+                if (!$user->is_verified) {
+                    return response()->json([
+                        'status_code' => 2,
+                        'data' => [
+                            'is_verified' => false,
+                            'email' => $user->email,
+                        ],
+                        'message' => 'Please verify your email address before logging in. We have sent a verification link to your email.'
+                    ]);
+                }
+
                 $token = $user->createToken('api-token')->plainTextToken;
                 $user->append('profile_picture');
                 return response()->json(['status_code' => 1,'data' => ['user' => $user, 'token' => $token ],'message'=>'Login successfull.']);
@@ -41,12 +53,19 @@ class AuthController extends Controller
     }
     public function registerAdmin(Request $request)
     {
+        if (!$request->has('turnstile_token') && $request->has('cf-turnstile-response')) {
+            $request->merge(['turnstile_token' => $request->input('cf-turnstile-response')]);
+        }
+
         $request->validate([
             'name' => 'required',
             'email' => 'required|email',
             'password' => 'required|min:6',
             'mobile' => 'required|string|min:6|max:15',
             'country_code' => 'required|string',
+            'turnstile_token' => ['required', 'string', new Turnstile($request->ip())],
+        ], [
+            'turnstile_token.required' => 'Please complete the security check.',
         ]);
 
         $user = User::where('email', $request->input('email'))->first();
@@ -61,26 +80,23 @@ class AuthController extends Controller
                 $request->input('mobile'),
                 $request->input('country_code')
             );
-            $message = 'Your account has been created !';
-            $token = $user->createToken('api-token')->plainTextToken;
 
-            $verificationLink =$this->generateVerificationLink($user->id,'REGISTER');
+            $verificationLink = $this->generateVerificationLink($user->id, 'REGISTER');
             $data = [
                 'name' => $user->name,
                 'link' => $verificationLink
             ];
             $body = view('email.verification_email', $data)->render();
             $subject = 'Verify your email';
-            Helper::sendEmail($user->email,$subject,$body,$user->name);
+            Helper::sendEmail($user->email, $subject, $body, $user->name);
 
             $response = [
                 'status_code' => 1,
                 'data' => [
-                    'user' => $user,
-                    'token' => $token,
+                    'is_verified' => false,
+                    'email' => $user->email,
                 ],
-                "message" => $message,
-
+                "message" => 'Your account has been created! Please check your email to verify your account before logging in.',
             ];
             return response()->json($response);
         }
@@ -89,11 +105,44 @@ class AuthController extends Controller
             $data = [
                 'status_code' => 2,
                 "message" => $message,
-
             ];
             return response()->json($data);
         }
+    }
+    public function resendRegistrationVerificationLink(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
 
+        $user = User::where('email', $request->input('email'))->first();
+        if ($user) {
+            if ($user->is_verified) {
+                return response()->json([
+                    'status_code' => 2,
+                    'message' => 'This account is already verified. Please log in.',
+                ]);
+            }
+
+            $verificationLink = $this->generateVerificationLink($user->id, 'REGISTER');
+            $data = [
+                'name' => $user->name,
+                'link' => $verificationLink
+            ];
+            $body = view('email.verification_email', $data)->render();
+            $subject = 'Verify your email';
+            Helper::sendEmail($user->email, $subject, $body, $user->name);
+
+            return response()->json([
+                'status_code' => 1,
+                'message' => 'Verification link has been resent! Please check your email inbox.',
+            ]);
+        }
+
+        return response()->json([
+            'status_code' => 2,
+            'message' => 'Account not found with this email address.',
+        ]);
     }
     public function sendVerificationLink()
     {
@@ -193,7 +242,8 @@ class AuthController extends Controller
                 'verification_token' => '',
                 'is_verified' => 1
             ]);
-            return redirect(config('app.website_url'));
+            $redirectUrl = rtrim(config('app.website_url'), '/') . '/login?verified=1';
+            return redirect($redirectUrl);
         }
         else {
             $data = [
