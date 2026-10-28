@@ -497,7 +497,7 @@ class Helper
             'password' => bcrypt($password),
             'login_type' => $loginType,
             'role' => $role,
-            'is_verified' => $loginType == 2 || $loginType == 3 ? 1 : 0,
+            'is_verified' => $parentId > 0 || $loginType == 2 || $loginType == 3 ? 1 : 0,
             'parent_user_id' => $parentId,
             'trial_ends_at' => now()->addDays(14),
             'profile_picture' => $avatarUrl,

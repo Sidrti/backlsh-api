@@ -39,7 +39,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'verifyEmail']);
         Route::get('/auth/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'verifyEmail']);
         Route::post('/auth/resend-verification-link', [AuthController::class, 'resendRegistrationVerificationLink'])->middleware('throttle:5,1');
-        Route::post('/auth/forget-password/send-verification-link', [AuthController::class, 'forgetPasswordSendVerificationLink']);
+        Route::post('/auth/forget-password/send-verification-link', [AuthController::class, 'forgetPasswordSendVerificationLink'])->middleware('throttle:5,1');
+        Route::post('/auth/forget-password/change-password', [AuthController::class, 'forgetPasswordChangePassword'])->middleware('throttle:5,1');
         Route::get('/auth/forget-password/verify-email/{verificationToken}/{user_id}', [AuthController::class, 'forgetPasswordVerifyEmail']);
         Route::get('/auth/app-link', [AuthController::class, 'fetchBacklshAppUrl']);
         Route::post('/paypal/webhook', [PaymentController::class, 'handleWebhook']);
@@ -72,7 +73,6 @@ Route::prefix('v1')->group(function () {
             Route::post('/auth/user/update', [AuthController::class, 'meUpdate']);
             Route::post('/auth/user/settings', [AuthController::class, 'updateSettings']);
             Route::get('/auth/account-details', [AuthController::class, 'fetchUserAccountDetails']);
-            Route::post('/auth/forget-password/change-password', [AuthController::class, 'forgetPasswordChangePassword']);
             Route::get('/auth/send-verification-link', [AuthController::class, 'sendVerificationLink']);
 
             Route::get('/admin-dashboard', [DashboardController::class, 'fetchAdminDashboard']);
