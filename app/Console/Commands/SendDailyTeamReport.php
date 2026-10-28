@@ -10,6 +10,7 @@ use App\Models\UserProductivitySummary;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\Issue;
+use App\Support\ReportTime;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -74,6 +75,7 @@ class SendDailyTeamReport extends Command
 
             // Since report runs at the end of the day, "today" in the owner's timezone is what we want
             $today = $currentTime->copy()->startOfDay();
+            [$dayStartUtc, $dayEndUtc] = ReportTime::utcDayBounds($today);
             Log::info("SendDailyTeamReport: Running report for Owner ID {$owner->id} for date: " . $today->format('Y-m-d'));
 
             $teamMembers = User::where('parent_user_id', $owner->id)->orWhere('id', $owner->id)->get();
@@ -103,14 +105,16 @@ class SendDailyTeamReport extends Command
 
                 // Logged In / Out
                 $firstActivity = UserActivity::where('user_id', $employee->id)
-                    ->whereDate('start_datetime', $today)
+                    ->where('start_datetime', '>=', $dayStartUtc)
+                    ->where('start_datetime', '<', $dayEndUtc)
                     ->min('start_datetime');
                 $lastActivity = UserActivity::where('user_id', $employee->id)
-                    ->whereDate('start_datetime', $today)
+                    ->where('start_datetime', '>=', $dayStartUtc)
+                    ->where('start_datetime', '<', $dayEndUtc)
                     ->max('end_datetime');
 
-                $loggedIn = $firstActivity ? Carbon::parse($firstActivity)->setTimezone($timezone)->format('h:i A') : 'N/A';
-                $loggedOut = $lastActivity ? Carbon::parse($lastActivity)->setTimezone($timezone)->format('h:i A') : 'N/A';
+                $loggedIn = ReportTime::format($firstActivity, $timezone);
+                $loggedOut = ReportTime::format($lastActivity, $timezone);
 
                 $topWebsitesQuery = Helper::getTopWebsites(1, [$employee->id]);
                 $topAppsQuery = Helper::getTopProcesses(1, [$employee->id]);
@@ -202,7 +206,8 @@ class SendDailyTeamReport extends Command
                         'employeesData' => $employeesData,
                         'projectsData' => $projectsData,
                         'ownerName' => $owner->name,
-                        'date' => $today->format('M d, Y')
+                        'date' => $today->format('M d, Y'),
+                        'timezone' => $timezone,
                     ]
                 ])->render();
 

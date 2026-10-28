@@ -10,15 +10,17 @@ use GuzzleHttp\Psr7\Response;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
 use App\Rules\Turnstile;
+use App\Services\VerificationEmailService;
 
 class AuthController extends Controller
 {
-    public function login(Request $request) {
+    public function login(Request $request, VerificationEmailService $verificationEmail) {
 
         $request->validate([
             'email' => 'required|email',
@@ -29,13 +31,16 @@ class AuthController extends Controller
         if($user) {
             if (Hash::check($request->input('password'), $user->password)) {
                 if (!$user->is_verified) {
+                    $sent = $verificationEmail->send($user);
                     return response()->json([
                         'status_code' => 2,
                         'data' => [
                             'is_verified' => false,
                             'email' => $user->email,
                         ],
-                        'message' => 'Please verify your email address before logging in. We have sent a verification link to your email.'
+                        'message' => $sent
+                            ? 'Please verify your email address before logging in. A verification link has been sent to your email. Please check your inbox.'
+                            : 'Please verify your email address before logging in. We could not send the verification email. Please try resending the verification link.'
                     ]);
                 }
 
@@ -165,58 +170,51 @@ class AuthController extends Controller
     }
     public function forgetPasswordSendVerificationLink(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email',
+        $request->validate(['email' => 'required|email']);
+        $user = User::where('email', $request->input('email'))->first();
+        if (!$user) {
+            return response()->json(['status_code' => 2, 'message' => 'Account not found with this email address.']);
+        }
+
+        $broker = Password::broker();
+        if ($broker->getRepository()->recentlyCreatedToken($user)) {
+            return response()->json(['status_code' => 2, 'message' => 'Please wait a minute before requesting another reset link.']);
+        }
+        $token = $broker->createToken($user);
+        $link = rtrim(config('app.website_url'), '/') . '/change-password?' . http_build_query([
+            'token' => $token,
+            'email' => $user->email,
         ]);
-
-        $user = User::where('email',$request->input('email'))->first();
-        if($user) {
-            $verificationLink =$this->generateVerificationLink($user->id,'FORGET_PASSWORD');
-            $data = [
-                'name' => $user->name,
-                'link' => $verificationLink
-            ];
-            $body = view('email.verification_email', $data)->render();
-            $subject = 'Verify your email';
-            Helper::sendEmail($user->email,$subject,$body,$user->name);
-            $response = [
-                'status_code' => 1,
-                'message' => 'Verication link sent. Please check your email',
-                'link' => $verificationLink
-            ];
+        $body = view('email.reset_password', ['name' => $user->name, 'link' => $link,
+            'minutes' => config('auth.passwords.users.expire', 60)])->render();
+        if (Helper::sendEmail($user->email, 'Reset your Backlsh password', $body, $user->name) !== true) {
+            $broker->deleteToken($user);
+            return response()->json(['status_code' => 2, 'message' => 'Unable to send the reset email. Please try again.'], 503);
         }
-        else {
-            $response = [
-                'status_code' => 2,
-                'message' => 'Incorrect email',
-            ];
-        }
-
-        return response()->json($response);
+        return response()->json(['status_code' => 1, 'message' => 'Password reset link sent. Please check your email.']);
     }
+
     public function forgetPasswordChangePassword(Request $request)
     {
         $request->validate([
-            'password' => 'required|min:6',
+            'email' => 'required|email',
+            'token' => 'required|string',
+            'password' => 'required|string|min:6|confirmed',
         ]);
-        $user = User::find(auth()->user()->id);
-        $user->password = Hash::make($request->input('password'));
-        $user->save();
-
-        $token =  $request->header('Authorization');
-        if (Str::startsWith($token, 'Bearer ')) {
-            $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
+        $status = Password::broker()->reset(
+            $request->only('email', 'token', 'password', 'password_confirmation'),
+            function ($user, $password) {
+                $user->password = Hash::make($password);
+                $user->setRememberToken(Str::random(60));
+                $user->save();
+                $user->tokens()->delete();
+            }
+        );
+        if ($status !== Password::PASSWORD_RESET) {
+            return response()->json(['status_code' => 2,
+                'message' => 'This password reset link is invalid or has expired. Please request a new one.'], 422);
         }
-        $response = [
-            'status_code' => 1,
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-            'message' => 'Password updated',
-        ];
-        return response()->json($response);
-
+        return response()->json(['status_code' => 1, 'message' => 'Password updated. Please log in with your new password.']);
     }
     private function generateVerificationLink($user_id,$type='')
     {
@@ -228,9 +226,6 @@ class AuthController extends Controller
 
         $baseUrl = url('/');
         $verificationLink = $baseUrl . '/api/v1/website/auth/verify-email/' . $verificationToken.'/'.$user_id;
-        if($type == 'FORGET_PASSWORD') {
-            $verificationLink = $baseUrl . '/api/v1/website/auth/forget-password/verify-email/' . $verificationToken.'/'.$user_id;
-        }
 
         return $verificationLink;
     }
@@ -254,25 +249,10 @@ class AuthController extends Controller
             return response()->json($data);
         }
     }
-    public function forgetPasswordVerifyEmail($verificationToken,$user_id)
+    public function forgetPasswordVerifyEmail($verificationToken, $user_id)
     {
-        $user = User::where('id', $user_id)->where('verification_token',$verificationToken)->first();
-        if($user) {
-            $user->update([
-                'verification_token' => '',
-            ]);
-            $token = $user->createToken('api-token')->plainTextToken;
-            $redirectWebsiteUrl = config('app.website_url').'/change-password?token='.$token;
-            return redirect($redirectWebsiteUrl);
-        }
-        else {
-            $data = [
-                'status_code' => 2,
-                'message' => 'Unable to verify email. Please try again',
-
-            ];
-            return response()->json($data);
-        }
+        // Old verification emails cannot be used as password reset credentials.
+        return redirect(rtrim(config('app.website_url'), '/') . '/forget-password?expired=1');
     }
     public function redirectToGoogle()
     {
@@ -307,6 +287,7 @@ class AuthController extends Controller
     }
     public function me(Request $request)
     {
+        \App\Support\ReportTime::rememberBrowserTimezone(auth()->user(), $request->query('timezone'));
         $token =  $request->header('Authorization');
         if (Str::startsWith($token, 'Bearer ')) {
             $token = Str::substr($token, 7); // Remove the 'Bearer ' prefix
@@ -347,6 +328,10 @@ class AuthController extends Controller
 
     public function updateSettings(Request $request)
     {
+        $request->validate([
+            'timezone' => ['sometimes', 'required', 'timezone'],
+            'report_time' => ['sometimes', 'required', 'date_format:H:i'],
+        ]);
         $user = auth()->user();
         
         $settings = $user->settings ?? [];

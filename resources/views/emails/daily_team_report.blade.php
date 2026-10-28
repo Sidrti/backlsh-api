@@ -177,12 +177,12 @@
   <div class="header">
     <div class="header-eyebrow">Backlsh &mdash; Automated Report</div>
     <div class="header-title">Daily Team Report</div>
-    <div class="header-meta">{{ $reportData['date'] }}</div>
+    <div class="header-meta">{{ $reportData['date'] }} &middot; {{ $reportData['timezone'] }}</div>
   </div>
 
   <!-- Greeting -->
   <div class="greeting">
-    <p>Hi {{ $reportData['ownerName'] }}, here is your team's activity summary for yesterday.</p>
+    <p>Hi {{ $reportData['ownerName'] }}, here is your team's activity summary for {{ $reportData['date'] }}. All times use {{ $reportData['timezone'] }}.</p>
   </div>
 
   <!-- Total Hours -->
@@ -205,8 +205,8 @@
         <tr>
           <th>Employee</th>
           <th>Hours</th>
-          <th>Login</th>
-          <th>Logout</th>
+          <th>Tracker Login</th>
+          <th>Last Activity</th>
           <th>Top Websites</th>
           <th>Top Apps</th>
         </tr>
